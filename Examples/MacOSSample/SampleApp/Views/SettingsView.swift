@@ -2,21 +2,18 @@ import CoreGraphics
 import AudioCaptureKit
 import SwiftUI
 
-/// Settings panel for backend URL and audio source selection.
+/// Settings panel for audio source selection and debug controls.
 struct SettingsView: View {
-    @Binding var backendURL: String
     @Binding var selectedMicID: String?
     @Binding var encryptionEnabled: Bool
     @Binding var debugEnableMic: Bool
     @Binding var debugEnableSystem: Bool
     let availableMics: [AudioSource]
-    let isBackendReachable: Bool
     let bluetoothRoutingConflict: Bool
     let bluetoothRecommendation: String?
     let systemAudioPermitted: Bool
     let recordingState: RecordingUIState
     let diagnostics: CaptureSessionDiagnostics
-    let onCheckHealth: () -> Void
     let onGenerateTestTone: () -> Void
 
     var body: some View {
@@ -44,31 +41,9 @@ struct SettingsView: View {
                 }
 
                 Text("System audio capture requires \"Screen & System Audio Recording\" permission. "
-                     + "Ensure \"MacOS Sample Recorder\" (com.therapyrecorder.MacOSSample) is enabled in "
-                     + "System Settings > Privacy & Security > Screen & System Audio Recording. "
-                     + "Launch the app via `open .build/MacOSSample.app` (not swift run).")
+                     + "Enable this app in System Settings > Privacy & Security > Screen & System Audio Recording.")
                     .font(.caption)
                     .foregroundStyle(systemAudioPermitted ? Color.secondary : Color.orange)
-            }
-
-            Section("Backend") {
-                TextField("Backend URL", text: $backendURL)
-                    .textFieldStyle(.roundedBorder)
-
-                HStack {
-                    Circle()
-                        .fill(isBackendReachable ? .green : .red)
-                        .frame(width: 8, height: 8)
-                    Text(isBackendReachable ? "Connected" : "Not connected")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-
-                    Spacer()
-
-                    Button("Check", action: onCheckHealth)
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
-                }
             }
 
             Section("Microphone") {

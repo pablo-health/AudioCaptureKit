@@ -59,21 +59,16 @@ struct ContentView: View {
 
             // Settings tab
             SettingsView(
-                backendURL: $uploadVM.backendURL,
                 selectedMicID: $recordingVM.selectedMicID,
                 encryptionEnabled: $recordingVM.encryptionEnabled,
                 debugEnableMic: $recordingVM.debugEnableMic,
                 debugEnableSystem: $recordingVM.debugEnableSystem,
                 availableMics: recordingVM.availableMics,
-                isBackendReachable: uploadVM.isBackendReachable,
                 bluetoothRoutingConflict: recordingVM.bluetoothRoutingConflict,
                 bluetoothRecommendation: recordingVM.bluetoothRecommendation,
                 systemAudioPermitted: recordingVM.systemAudioPermitted,
                 recordingState: recordingVM.recordingState,
                 diagnostics: recordingVM.debugDiagnostics,
-                onCheckHealth: {
-                    Task { await uploadVM.checkBackendHealth() }
-                },
                 onGenerateTestTone: {
                     recordingVM.generateTestTone()
                 }
@@ -86,7 +81,6 @@ struct ContentView: View {
         .frame(minWidth: 500, minHeight: 600)
         .task {
             await recordingVM.loadAudioSources()
-            await uploadVM.checkBackendHealth()
         }
         .alert(
             "Recording Error",
