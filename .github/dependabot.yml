@@ -1,0 +1,69 @@
+version: 2
+
+updates:
+  # Swift (SPM)
+  - package-ecosystem: swift
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      swift-crypto:
+        patterns:
+          - "swift-crypto"
+          - "swift-asn1"
+
+  # Rust workspace
+  - package-ecosystem: cargo
+    directory: /windows
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      crypto:
+        patterns:
+          - "aes-gcm"
+          - "sha2"
+      utility:
+        patterns:
+          - "parking_lot"
+          - "thiserror"
+          - "log"
+
+  # Sample app (npm)
+  - package-ecosystem: npm
+    directory: /Examples/windows/SampleApp
+    schedule:
+      interval: weekly
+      day: tuesday
+    groups:
+      tauri:
+        patterns:
+          - "@tauri-apps/*"
+      radix-ui:
+        patterns:
+          - "@radix-ui/*"
+      react:
+        patterns:
+          - "react"
+          - "react-dom"
+          - "@types/react"
+          - "@types/react-dom"
+
+  # Sample app Tauri backend (Rust)
+  - package-ecosystem: cargo
+    directory: /Examples/windows/SampleApp/src-tauri
+    schedule:
+      interval: weekly
+      day: tuesday
+
+  # GitHub Actions
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: wednesday
+    groups:
+      all:
+        patterns:
+          - "*"
