@@ -16,6 +16,7 @@ jobs:
     name: Detect changes
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       pull-requests: read
     outputs:
       swift: ${{ github.event_name == 'push' || steps.filter.outputs.swift }}
@@ -189,7 +190,8 @@ jobs:
 
   dependency-review:
     name: Dependency Review
-    if: github.event_name == 'pull_request'
+    # Requires GHAS (free on public repos) — auto-activates when repo goes public
+    if: github.event_name == 'pull_request' && github.event.repository.visibility == 'public'
     runs-on: ubuntu-latest
     permissions:
       contents: read
