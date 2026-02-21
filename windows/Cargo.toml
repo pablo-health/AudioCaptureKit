@@ -1,0 +1,20 @@
+[workspace]
+members = [
+    "audio-capture-core",
+    "audio-capture-windows",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+license = "MIT"
+
+[workspace.dependencies]
+audio-capture-core = { path = "audio-capture-core" }
+parking_lot = "0.12"
+aes-gcm = "0.10"
+sha2 = "0.10"
+log = "0.4"
+thiserror = "2"
