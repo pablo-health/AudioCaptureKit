@@ -1,0 +1,50 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Warm neutral palette with honey accent */
+    --background: 0.975 0.005 85;
+    --foreground: 0.25 0.02 55;
+
+    --card: 0.995 0.002 85;
+    --card-foreground: 0.25 0.02 55;
+
+    --primary: 0.35 0.02 55;
+    --primary-foreground: 0.97 0.005 85;
+
+    --secondary: 0.94 0.01 85;
+    --secondary-foreground: 0.35 0.02 55;
+
+    --muted: 0.94 0.01 85;
+    --muted-foreground: 0.55 0.015 60;
+
+    --accent: 0.94 0.01 85;
+    --accent-foreground: 0.35 0.02 55;
+
+    --destructive: 0.55 0.2 25;
+    --destructive-foreground: 0.97 0.005 85;
+
+    --border: 0.90 0.01 80;
+    --input: 0.90 0.01 80;
+    --ring: 0.75 0.12 75;
+
+    /* Honey brand CTA */
+    --brand: 0.75 0.12 75;
+    --brand-foreground: 0.25 0.04 55;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  h1, h2, h3 {
+    font-family: "Fraunces", Georgia, serif;
+  }
+}

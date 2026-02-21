@@ -1,0 +1,24 @@
+[package]
+name = "sample-app"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.77"
+description = "Windows sample app for AudioCaptureKit"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-shell = "2"
+audio-capture-core = { path = "../../../../windows/audio-capture-core" }
+audio-capture-windows = { path = "../../../../windows/audio-capture-windows" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+parking_lot = "0.12"
+log = "0.4"
+env_logger = "0.11"
+aes-gcm = "0.10"
+rand = "0.8"
+chrono = "0.4"
+dirs-next = "2"

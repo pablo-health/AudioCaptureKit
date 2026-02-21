@@ -1,0 +1,9 @@
+{
+  "identifier": "default",
+  "description": "Default capability for the sample app",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "shell:allow-open"
+  ]
+}
