@@ -15,7 +15,7 @@ use std::thread;
 use std::time::Duration;
 
 use parking_lot::Mutex;
-use windows::core::*;
+use windows::core::PCWSTR;
 use windows::Win32::Media::Audio::*;
 use windows::Win32::System::Com::*;
 use windows::Win32::System::Threading::*;
@@ -116,13 +116,14 @@ fn loopback_capture_loop(
 ) -> Result<(), CaptureError> {
     unsafe {
         CoInitializeEx(None, COINIT_MULTITHREADED)
+            .ok()
             .map_err(|e| CaptureError::Unknown(format!("CoInitializeEx failed: {}", e)))?;
 
         let _com_guard = CoUninitializeGuard;
 
         let enumerator: IMMDeviceEnumerator =
             CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)
-                .map_err(|e| CaptureError::DeviceNotAvailable)?;
+                .map_err(|_| CaptureError::DeviceNotAvailable)?;
 
         // Get default RENDER endpoint (not capture — loopback reads from render)
         let device = enumerator
@@ -182,9 +183,8 @@ fn loopback_capture_loop(
         while running.load(Ordering::SeqCst) {
             thread::sleep(Duration::from_millis(10));
 
-            let mut packet_length: u32 = 0;
-            capture_client
-                .GetNextPacketSize(&mut packet_length)
+            let mut packet_length = capture_client
+                .GetNextPacketSize()
                 .map_err(|e| CaptureError::Unknown(format!("GetNextPacketSize failed: {}", e)))?;
 
             while packet_length > 0 {
@@ -208,8 +208,6 @@ fn loopback_capture_loop(
                     let samples = std::slice::from_raw_parts(float_ptr, total_samples);
 
                     if flags & (AUDCLNT_BUFFERFLAGS_SILENT.0 as u32) != 0 {
-                        // Deliver silence explicitly (loopback may not fire when
-                        // nothing is playing — but when it does, honor the flag)
                         let silence = vec![0.0f32; total_samples];
                         callback(&silence, sample_rate, channels);
                     } else {
@@ -221,8 +219,8 @@ fn loopback_capture_loop(
                     .ReleaseBuffer(num_frames)
                     .map_err(|e| CaptureError::Unknown(format!("ReleaseBuffer failed: {}", e)))?;
 
-                capture_client
-                    .GetNextPacketSize(&mut packet_length)
+                packet_length = capture_client
+                    .GetNextPacketSize()
                     .map_err(|e| CaptureError::Unknown(format!("GetNextPacketSize failed: {}", e)))?;
             }
         }

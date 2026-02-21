@@ -9,7 +9,7 @@ use std::thread;
 use std::time::Duration;
 
 use parking_lot::Mutex;
-use windows::core::*;
+use windows::core::PCWSTR;
 use windows::Win32::Media::Audio::*;
 use windows::Win32::System::Com::*;
 use windows::Win32::System::Threading::*;
@@ -134,6 +134,7 @@ fn mic_capture_loop(
     unsafe {
         // Initialize COM on this thread
         CoInitializeEx(None, COINIT_MULTITHREADED)
+            .ok()
             .map_err(|e| CaptureError::Unknown(format!("CoInitializeEx failed: {}", e)))?;
 
         let _com_guard = CoUninitializeGuard;
@@ -141,7 +142,7 @@ fn mic_capture_loop(
         // Get capture device
         let enumerator: IMMDeviceEnumerator =
             CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)
-                .map_err(|e| CaptureError::DeviceNotAvailable)?;
+                .map_err(|_| CaptureError::DeviceNotAvailable)?;
 
         let device = if let Some(ref id) = device_id {
             let wide_id: Vec<u16> = id.encode_utf16().chain(std::iter::once(0)).collect();
@@ -210,9 +211,8 @@ fn mic_capture_loop(
         while running.load(Ordering::SeqCst) {
             thread::sleep(Duration::from_millis(10));
 
-            let mut packet_length: u32 = 0;
-            capture_client
-                .GetNextPacketSize(&mut packet_length)
+            let mut packet_length = capture_client
+                .GetNextPacketSize()
                 .map_err(|e| CaptureError::Unknown(format!("GetNextPacketSize failed: {}", e)))?;
 
             while packet_length > 0 {
@@ -251,8 +251,8 @@ fn mic_capture_loop(
                     .ReleaseBuffer(num_frames)
                     .map_err(|e| CaptureError::Unknown(format!("ReleaseBuffer failed: {}", e)))?;
 
-                capture_client
-                    .GetNextPacketSize(&mut packet_length)
+                packet_length = capture_client
+                    .GetNextPacketSize()
                     .map_err(|e| CaptureError::Unknown(format!("GetNextPacketSize failed: {}", e)))?;
             }
         }

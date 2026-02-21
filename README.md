@@ -113,6 +113,19 @@ let result = session.stop()?;
 
 See `windows/` for source code.
 
+### Sample App (Tauri v2)
+
+A desktop GUI at `Examples/windows/SampleApp/` built with Tauri v2 (Rust backend + React frontend). Records mic + system audio, shows real-time level meters, lists recordings, and supports device selection and encryption toggle.
+
+**Prerequisites:** Node.js 18+, Rust 1.77+, Windows 10 SDK
+
+```bash
+cd Examples/windows/SampleApp
+npm install
+npm run tauri dev      # Dev mode with hot reload
+npm run tauri build    # Produces .exe + MSI installer in src-tauri/target/release/bundle/
+```
+
 ## License
 
 MIT

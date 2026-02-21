@@ -28,6 +28,12 @@ DerivedData/
 
 # Rust
 windows/target/
+**/src-tauri/target/
+
+# Node / Tauri frontend
+node_modules/
+dist/
+package-lock.json
 
 # Claude Code
 .claude/

@@ -20,13 +20,16 @@ pub trait CaptureEncryptor: Send + Sync {
 
     /// Algorithm identifier (e.g., "AES-256-GCM").
     fn algorithm(&self) -> &str;
+
+    /// Clone this encryptor into a new boxed trait object.
+    ///
+    /// Encryptors are stateless (key + algorithm), so cloning is trivial.
+    fn clone_box(&self) -> Box<dyn CaptureEncryptor>;
 }
 
 // Allow CaptureConfiguration to clone its encryptor via trait object.
 impl Clone for Box<dyn CaptureEncryptor> {
     fn clone(&self) -> Self {
-        // Encryptors are stateless (key + algorithm), so we need CloneEncryptor.
-        // For now, this is a compile-time marker; real impls use Arc.
-        panic!("CaptureEncryptor trait objects cannot be cloned directly; wrap in Arc instead")
+        self.clone_box()
     }
 }

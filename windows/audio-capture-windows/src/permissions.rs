@@ -7,7 +7,6 @@
 //! Unlike macOS TCC, there's no per-app consent dialog for unpackaged desktop apps.
 //! Packaged apps (MSIX/UWP) get an automatic consent prompt.
 
-use windows::core::*;
 use windows::Win32::Media::Audio::*;
 use windows::Win32::System::Com::*;
 
@@ -21,6 +20,7 @@ use audio_capture_core::models::error::CaptureError;
 pub fn check_microphone_permission() -> Result<bool, CaptureError> {
     unsafe {
         CoInitializeEx(None, COINIT_MULTITHREADED)
+            .ok()
             .map_err(|e| CaptureError::Unknown(format!("CoInitializeEx failed: {}", e)))?;
 
         let result = check_mic_access_inner();
@@ -41,7 +41,7 @@ unsafe fn check_mic_access_inner() -> Result<bool, CaptureError> {
     };
 
     // Try to activate IAudioClient — if access is denied, permission is off
-    let result: Result<IAudioClient, _> = device.Activate(CLSCTX_ALL, None);
+    let result: std::result::Result<IAudioClient, _> = device.Activate(CLSCTX_ALL, None);
 
     match result {
         Ok(_) => Ok(true),

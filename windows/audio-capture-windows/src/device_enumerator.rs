@@ -4,12 +4,12 @@
 //! (speaker/headphone) endpoints with friendly names, transport types,
 //! and Bluetooth HFP detection.
 
-use windows::core::*;
 use windows::Win32::Devices::FunctionDiscovery::*;
+use windows::Win32::Foundation::PROPERTYKEY;
 use windows::Win32::Media::Audio::*;
-use windows::Win32::System::Com::StructuredStorage::PropVariantClear;
 use windows::Win32::System::Com::*;
-use windows::Win32::System::Variant::*;
+use windows::Win32::System::Com::StructuredStorage::PropVariantToStringAlloc;
+use windows::Win32::UI::Shell::PropertiesSystem::IPropertyStore;
 
 use audio_capture_core::models::audio_models::{AudioSource, AudioTrackType, AudioTransportType};
 use audio_capture_core::models::error::CaptureError;
@@ -81,9 +81,6 @@ impl DeviceEnumerator {
     /// - Report EndpointFormFactor::Headset
     /// - Use 16kHz or 8kHz mono
     pub fn is_bluetooth_hfp(device_id: &str) -> bool {
-        // A full implementation would query PKEY_Device_EnumeratorName
-        // for "BTHENUM" and check PKEY_AudioEndpoint_FormFactor.
-        // For now, check the device ID for Bluetooth indicators.
         let id_lower = device_id.to_lowercase();
         id_lower.contains("bthenum") || id_lower.contains("bluetooth")
     }
@@ -142,80 +139,37 @@ impl DeviceEnumerator {
         }
     }
 
+    /// Read a string property from a device's property store.
+    fn read_device_string_property(device: &IMMDevice, key: &PROPERTYKEY) -> Option<String> {
+        unsafe {
+            let store: IPropertyStore = device.OpenPropertyStore(STGM_READ).ok()?;
+            let prop = store.GetValue(key).ok()?;
+            let pwstr = PropVariantToStringAlloc(&prop).ok()?;
+            let name = pwstr.to_string().ok()?;
+            CoTaskMemFree(Some(pwstr.0 as *const _));
+            Some(name)
+        }
+    }
+
     /// Read the PKEY_Device_FriendlyName property from a device.
     fn get_device_friendly_name(device: &IMMDevice) -> Option<String> {
-        unsafe {
-            let store = device
-                .OpenPropertyStore(STGM_READ)
-                .ok()?;
-
-            let mut prop_variant = std::mem::zeroed::<PROPVARIANT>();
-            store
-                .GetValue(&PKEY_Device_FriendlyName, &mut prop_variant)
-                .ok()?;
-
-            let name = if prop_variant.Anonymous.Anonymous.vt == VT_LPWSTR {
-                let pwsz = prop_variant
-                    .Anonymous
-                    .Anonymous
-                    .Anonymous
-                    .pwszVal;
-                if !pwsz.is_null() {
-                    let len = (0..)
-                        .take_while(|&i| *pwsz.offset(i) != 0)
-                        .count();
-                    Some(String::from_utf16_lossy(std::slice::from_raw_parts(
-                        pwsz, len,
-                    )))
-                } else {
-                    None
-                }
-            } else {
-                None
-            };
-
-            PropVariantClear(&mut prop_variant).ok();
-            name
-        }
+        Self::read_device_string_property(device, &PKEY_Device_FriendlyName)
     }
 
     /// Detect the transport type of an audio device from its property store.
     fn detect_transport_type(device: &IMMDevice) -> AudioTransportType {
-        unsafe {
-            let store = match device.OpenPropertyStore(STGM_READ) {
-                Ok(s) => s,
-                Err(_) => return AudioTransportType::Unknown,
-            };
+        let name = match Self::read_device_string_property(device, &PKEY_Device_EnumeratorName) {
+            Some(n) => n,
+            None => return AudioTransportType::BuiltIn,
+        };
 
-            // Check PKEY_Device_EnumeratorName for Bluetooth
-            let mut prop = std::mem::zeroed::<PROPVARIANT>();
-            if store
-                .GetValue(&PKEY_Device_EnumeratorName, &mut prop)
-                .is_ok()
-            {
-                if prop.Anonymous.Anonymous.vt == VT_LPWSTR {
-                    let pwsz = prop.Anonymous.Anonymous.Anonymous.pwszVal;
-                    if !pwsz.is_null() {
-                        let len = (0..)
-                            .take_while(|&i| *pwsz.offset(i) != 0)
-                            .count();
-                        let name = String::from_utf16_lossy(std::slice::from_raw_parts(pwsz, len));
-                        PropVariantClear(&mut prop).ok();
-
-                        if name.contains("BTHENUM") {
-                            return AudioTransportType::Bluetooth;
-                        }
-                        if name.contains("BTHLEENUM") {
-                            return AudioTransportType::BluetoothLE;
-                        }
-                        if name.contains("USB") {
-                            return AudioTransportType::Usb;
-                        }
-                    }
-                }
-                PropVariantClear(&mut prop).ok();
-            }
-
+        if name.contains("BTHENUM") {
+            AudioTransportType::Bluetooth
+        } else if name.contains("BTHLEENUM") {
+            AudioTransportType::BluetoothLE
+        } else if name.contains("USB") {
+            AudioTransportType::Usb
+        } else {
             AudioTransportType::BuiltIn
         }
     }
