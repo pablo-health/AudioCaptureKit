@@ -52,26 +52,47 @@ public final class AVFoundationMicCapture: NSObject, AudioCaptureProvider, @unch
         let alreadyCapturing = state.withLock { $0.isCapturing }
         guard !alreadyCapturing else { return }
 
-        // Check/request microphone permission
+        try await requestMicrophonePermission()
+
+        let device = try resolveAudioDevice()
+        let session = try configureSession(device: device)
+
+        state.withLock {
+            $0.bufferCallback = bufferCallback
+            $0.captureSession = session
+            $0.audioOutput = nil
+            $0.isCapturing = true
+        }
+
+        session.startRunning()
+        logger.info("Microphone capture started")
+    }
+
+    /// Requests microphone permission, throwing if denied.
+    private func requestMicrophonePermission() async throws {
         let authorized = await withCheckedContinuation { continuation in
             AVCaptureDevice.requestAccess(for: .audio) { granted in
                 continuation.resume(returning: granted)
             }
         }
-
         guard authorized else {
             throw CaptureError.permissionDenied
         }
+    }
 
-        let device: AVCaptureDevice
+    /// Resolves the audio capture device based on the configured device ID.
+    private func resolveAudioDevice() throws -> AVCaptureDevice {
         if let deviceID, let specific = AVCaptureDevice(uniqueID: deviceID) {
-            device = specific
-        } else if let defaultDevice = AVCaptureDevice.default(for: .audio) {
-            device = defaultDevice
-        } else {
-            throw CaptureError.deviceNotAvailable
+            return specific
         }
+        if let defaultDevice = AVCaptureDevice.default(for: .audio) {
+            return defaultDevice
+        }
+        throw CaptureError.deviceNotAvailable
+    }
 
+    /// Creates and configures an `AVCaptureSession` with the given device.
+    private func configureSession(device: AVCaptureDevice) throws -> AVCaptureSession {
         let session = AVCaptureSession()
         session.beginConfiguration()
 
@@ -97,27 +118,19 @@ public final class AVFoundationMicCapture: NSObject, AudioCaptureProvider, @unch
         session.addOutput(output)
         session.commitConfiguration()
 
-        state.withLock {
-            $0.bufferCallback = bufferCallback
-            $0.captureSession = session
-            $0.audioOutput = output
-            $0.isCapturing = true
-        }
-
-        session.startRunning()
-        logger.info("Microphone capture started")
+        return session
     }
 
     /// Stops capturing microphone audio and releases the capture session.
     public func stop() async {
         let session: AVCaptureSession? = state.withLock {
             guard $0.isCapturing else { return nil }
-            let s = $0.captureSession
+            let current = $0.captureSession
             $0.isCapturing = false
             $0.captureSession = nil
             $0.audioOutput = nil
             $0.bufferCallback = nil
-            return s
+            return current
         }
 
         session?.stopRunning()

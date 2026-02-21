@@ -74,9 +74,7 @@ impl CaptureProvider for WasapiMicCapture {
 
     fn start(&mut self, callback: AudioBufferCallback) -> Result<(), CaptureError> {
         if self.running.load(Ordering::SeqCst) {
-            return Err(CaptureError::ConfigurationFailed(
-                "mic capture already running".into(),
-            ));
+            return Err(CaptureError::ConfigurationFailed("mic capture already running".into()));
         }
 
         self.running.store(true, Ordering::SeqCst);
@@ -141,8 +139,7 @@ fn mic_capture_loop(
 
         // Get capture device
         let enumerator: IMMDeviceEnumerator =
-            CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)
-                .map_err(|_| CaptureError::DeviceNotAvailable)?;
+            CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL).map_err(|_| CaptureError::DeviceNotAvailable)?;
 
         let device = if let Some(ref id) = device_id {
             let wide_id: Vec<u16> = id.encode_utf16().chain(std::iter::once(0)).collect();
@@ -183,24 +180,17 @@ fn mic_capture_loop(
                 mix_format,
                 None,
             )
-            .map_err(|e| {
-                CaptureError::ConfigurationFailed(format!("IAudioClient::Initialize failed: {}", e))
-            })?;
+            .map_err(|e| CaptureError::ConfigurationFailed(format!("IAudioClient::Initialize failed: {}", e)))?;
 
         // Get capture client service
         let capture_client: IAudioCaptureClient = audio_client
             .GetService()
-            .map_err(|e| {
-                CaptureError::ConfigurationFailed(format!("GetService failed: {}", e))
-            })?;
+            .map_err(|e| CaptureError::ConfigurationFailed(format!("GetService failed: {}", e)))?;
 
         // Register with MMCSS for real-time priority
         let mut task_index: u32 = 0;
         let task_name: Vec<u16> = "Pro Audio\0".encode_utf16().collect();
-        let _mmcss_handle = AvSetMmThreadCharacteristicsW(
-            PCWSTR(task_name.as_ptr()),
-            &mut task_index,
-        );
+        let _mmcss_handle = AvSetMmThreadCharacteristicsW(PCWSTR(task_name.as_ptr()), &mut task_index);
 
         // Start capture
         audio_client
@@ -221,13 +211,7 @@ fn mic_capture_loop(
                 let mut flags: u32 = 0;
 
                 capture_client
-                    .GetBuffer(
-                        &mut buffer_ptr,
-                        &mut num_frames,
-                        &mut flags,
-                        None,
-                        None,
-                    )
+                    .GetBuffer(&mut buffer_ptr, &mut num_frames, &mut flags, None, None)
                     .map_err(|e| CaptureError::Unknown(format!("GetBuffer failed: {}", e)))?;
 
                 if num_frames > 0 && !buffer_ptr.is_null() {
@@ -235,8 +219,7 @@ fn mic_capture_loop(
 
                     // WASAPI delivers Float32 in shared mode
                     let float_ptr = buffer_ptr as *const f32;
-                    let samples =
-                        std::slice::from_raw_parts(float_ptr, total_samples);
+                    let samples = std::slice::from_raw_parts(float_ptr, total_samples);
 
                     // Handle silence flag
                     if flags & (AUDCLNT_BUFFERFLAGS_SILENT.0 as u32) != 0 {

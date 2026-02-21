@@ -3,7 +3,10 @@ yanked = "warn"
 unmaintained = "workspace"
 
 [licenses]
-unlicensed = "deny"
+# All licenses are denied unless explicitly allowed (cargo-deny v2 default).
+# This replaces the removed `unlicensed`, `deny`, and `copyleft` keys.
+# GPL, AGPL, and other copyleft licenses are blocked by omission from `allow`.
+confidence-threshold = 0.8
 allow = [
     "MIT",
     "Apache-2.0",
@@ -14,12 +17,6 @@ allow = [
     "Unicode-DFS-2016",
     "Zlib",
 ]
-deny = [
-    "GPL-2.0",
-    "GPL-3.0",
-    "AGPL-3.0",
-]
-copyleft = "deny"
 
 [bans]
 multiple-versions = "warn"

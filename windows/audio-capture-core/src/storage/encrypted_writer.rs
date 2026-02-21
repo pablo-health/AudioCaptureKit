@@ -56,14 +56,12 @@ impl EncryptedFileWriter {
 
         // Ensure output directory exists
         if let Some(parent) = self.file_path.parent() {
-            fs::create_dir_all(parent).map_err(|e| {
-                CaptureError::StorageError(format!("failed to create directory: {}", e))
-            })?;
+            fs::create_dir_all(parent)
+                .map_err(|e| CaptureError::StorageError(format!("failed to create directory: {}", e)))?;
         }
 
-        let file = File::create(&self.file_path).map_err(|e| {
-            CaptureError::StorageError(format!("failed to create file: {}", e))
-        })?;
+        let file = File::create(&self.file_path)
+            .map_err(|e| CaptureError::StorageError(format!("failed to create file: {}", e)))?;
 
         self.file = Some(file);
 
@@ -85,9 +83,7 @@ impl EncryptedFileWriter {
     /// In plaintext mode, writes raw PCM data directly.
     pub fn write(&mut self, data: &[u8]) -> Result<(), CaptureError> {
         if !self.is_open {
-            return Err(CaptureError::StorageError(
-                "file is not open for writing".into(),
-            ));
+            return Err(CaptureError::StorageError("file is not open for writing".into()));
         }
 
         if let Some(ref encryptor) = self.encryptor {
@@ -153,8 +149,7 @@ impl EncryptedFileWriter {
             .map_err(|e| CaptureError::StorageError(e.to_string()))?;
 
         // Flush and close file
-        file.flush()
-            .map_err(|e| CaptureError::StorageError(e.to_string()))?;
+        file.flush().map_err(|e| CaptureError::StorageError(e.to_string()))?;
         self.file = None;
         self.is_open = false;
 
@@ -174,9 +169,10 @@ impl EncryptedFileWriter {
     }
 
     fn write_raw(&mut self, data: &[u8]) -> Result<(), CaptureError> {
-        let file = self.file.as_mut().ok_or_else(|| {
-            CaptureError::StorageError("file is not open".into())
-        })?;
+        let file = self
+            .file
+            .as_mut()
+            .ok_or_else(|| CaptureError::StorageError("file is not open".into()))?;
         file.write_all(data)
             .map_err(|e| CaptureError::StorageError(format!("write failed: {}", e)))?;
         self.total_bytes_written += data.len() as u64;
@@ -186,8 +182,8 @@ impl EncryptedFileWriter {
 
 /// Compute SHA-256 hex digest of a file.
 fn sha256_file(path: &Path) -> Result<String, CaptureError> {
-    let data = fs::read(path)
-        .map_err(|e| CaptureError::StorageError(format!("failed to read file for checksum: {}", e)))?;
+    let data =
+        fs::read(path).map_err(|e| CaptureError::StorageError(format!("failed to read file for checksum: {}", e)))?;
     let digest = Sha256::digest(&data);
     Ok(hex_encode(&digest))
 }
@@ -218,6 +214,10 @@ mod tests {
 
         fn algorithm(&self) -> &str {
             "TEST-ENCRYPTOR"
+        }
+
+        fn clone_box(&self) -> Box<dyn CaptureEncryptor> {
+            Box::new(NullEncryptor)
         }
     }
 
@@ -254,8 +254,7 @@ mod tests {
         assert_eq!(&file_data[8..12], b"WAVE");
 
         // Verify data size in header
-        let data_size =
-            u32::from_le_bytes([file_data[40], file_data[41], file_data[42], file_data[43]]);
+        let data_size = u32::from_le_bytes([file_data[40], file_data[41], file_data[42], file_data[43]]);
         assert_eq!(data_size, 16);
 
         fs::remove_file(&path).ok();
@@ -288,8 +287,7 @@ mod tests {
         assert_eq!(file_data.len(), 44 + 4 + expected_chunk_size);
 
         // Verify chunk length prefix
-        let chunk_len =
-            u32::from_le_bytes([file_data[44], file_data[45], file_data[46], file_data[47]]);
+        let chunk_len = u32::from_le_bytes([file_data[44], file_data[45], file_data[46], file_data[47]]);
         assert_eq!(chunk_len, expected_chunk_size as u32);
 
         fs::remove_file(&path).ok();
@@ -311,12 +309,10 @@ mod tests {
         writer.close(Some(16000.0), 2, 16).unwrap();
 
         let file_data = fs::read(&path).unwrap();
-        let sample_rate =
-            u32::from_le_bytes([file_data[24], file_data[25], file_data[26], file_data[27]]);
+        let sample_rate = u32::from_le_bytes([file_data[24], file_data[25], file_data[26], file_data[27]]);
         assert_eq!(sample_rate, 16000);
 
-        let byte_rate =
-            u32::from_le_bytes([file_data[28], file_data[29], file_data[30], file_data[31]]);
+        let byte_rate = u32::from_le_bytes([file_data[28], file_data[29], file_data[30], file_data[31]]);
         assert_eq!(byte_rate, 64000); // 16000 * 2 * 2
 
         fs::remove_file(&path).ok();

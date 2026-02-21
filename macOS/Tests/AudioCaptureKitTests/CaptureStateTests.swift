@@ -7,17 +7,23 @@ struct CaptureStateTests {
 
     @Test("Idle state equality")
     func idleEquality() {
-        #expect(CaptureState.idle == CaptureState.idle)
+        let state1 = CaptureState.idle
+        let state2 = CaptureState.idle
+        #expect(state1 == state2)
     }
 
     @Test("Configuring state equality")
     func configuringEquality() {
-        #expect(CaptureState.configuring == CaptureState.configuring)
+        let state1 = CaptureState.configuring
+        let state2 = CaptureState.configuring
+        #expect(state1 == state2)
     }
 
     @Test("Ready state equality")
     func readyEquality() {
-        #expect(CaptureState.ready == CaptureState.ready)
+        let state1 = CaptureState.ready
+        let state2 = CaptureState.ready
+        #expect(state1 == state2)
     }
 
     @Test("Capturing state equality with same duration")
@@ -42,7 +48,9 @@ struct CaptureStateTests {
 
     @Test("Stopping state equality")
     func stoppingEquality() {
-        #expect(CaptureState.stopping == CaptureState.stopping)
+        let state1 = CaptureState.stopping
+        let state2 = CaptureState.stopping
+        #expect(state1 == state2)
     }
 
     @Test("Failed state equality with same error")

@@ -34,11 +34,7 @@ impl StereoMixer {
         let mut stereo = vec![0.0f32; frame_count * 2];
         for i in 0..frame_count {
             let mic_sample = if i < mic_frames { mic[i] } else { 0.0 };
-            let sys_l = if i * 2 < system.len() {
-                system[i * 2]
-            } else {
-                0.0
-            };
+            let sys_l = if i * 2 < system.len() { system[i * 2] } else { 0.0 };
             let sys_r = if i * 2 + 1 < system.len() {
                 system[i * 2 + 1]
             } else {
@@ -94,15 +90,15 @@ impl StereoMixer {
         }
 
         let mut output = vec![0.0f32; output_count];
-        for i in 0..output_count {
+        for (i, sample) in output.iter_mut().enumerate() {
             let source_index = i as f64 / ratio;
             let index = source_index as usize;
             let fraction = (source_index - index as f64) as f32;
 
             if index + 1 < samples.len() {
-                output[i] = samples[index] * (1.0 - fraction) + samples[index + 1] * fraction;
+                *sample = samples[index] * (1.0 - fraction) + samples[index + 1] * fraction;
             } else if index < samples.len() {
-                output[i] = samples[index];
+                *sample = samples[index];
             }
         }
         output
@@ -132,8 +128,8 @@ impl StereoMixer {
 
             for ch in 0..2usize {
                 if index + 1 < frame_count {
-                    output[i * 2 + ch] = samples[index * 2 + ch] * (1.0 - fraction)
-                        + samples[(index + 1) * 2 + ch] * fraction;
+                    output[i * 2 + ch] =
+                        samples[index * 2 + ch] * (1.0 - fraction) + samples[(index + 1) * 2 + ch] * fraction;
                 } else if index < frame_count {
                     output[i * 2 + ch] = samples[index * 2 + ch];
                 }
@@ -153,10 +149,7 @@ impl StereoMixer {
 
     /// Compute peak absolute level of samples.
     pub fn peak_level(samples: &[f32]) -> f32 {
-        samples
-            .iter()
-            .map(|s| s.abs())
-            .fold(0.0f32, f32::max)
+        samples.iter().map(|s| s.abs()).fold(0.0f32, f32::max)
     }
 }
 
@@ -188,7 +181,7 @@ mod tests {
         let result = mixer.mix_mic_with_stereo_system(&mic, &system);
 
         assert_eq!(result.len(), 6); // 3 frames
-        // Frame 2 and 3: system is zero-padded
+                                     // Frame 2 and 3: system is zero-padded
         assert!((result[4] - 0.1).abs() < 1e-6); // L: 0.1 + 0.0
         assert!((result[5] - 0.1).abs() < 1e-6); // R: 0.1 + 0.0
     }

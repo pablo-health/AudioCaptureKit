@@ -31,9 +31,8 @@ pub fn check_microphone_permission() -> Result<bool, CaptureError> {
 }
 
 unsafe fn check_mic_access_inner() -> Result<bool, CaptureError> {
-    let enumerator: IMMDeviceEnumerator =
-        CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)
-            .map_err(|e| CaptureError::Unknown(format!("failed to create enumerator: {}", e)))?;
+    let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)
+        .map_err(|e| CaptureError::Unknown(format!("failed to create enumerator: {}", e)))?;
 
     let device = match enumerator.GetDefaultAudioEndpoint(eCapture, eConsole) {
         Ok(d) => d,
