@@ -11,6 +11,7 @@ on:
 
 permissions:
   contents: read
+  security-events: write
 
 jobs:
   trivy-dependency-scan:
@@ -29,6 +30,24 @@ jobs:
           format: table
           exit-code: 1
 
+      - name: Run Trivy (vulnerabilities — SARIF)
+        if: always()
+        uses: aquasecurity/trivy-action@e368e328979b113139d6f9068e03accaed98a518 # 0.34.1
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          format: sarif
+          output: trivy-vuln.sarif
+
+      - name: Upload Trivy SARIF (vulnerabilities)
+        if: always()
+        uses: github/codeql-action/upload-sarif@89a39a4e59826350b863aa6b6252a07ad50cf83e # v4
+        with:
+          sarif_file: trivy-vuln.sarif
+          category: trivy-dependency-scan
+
   trivy-config-scan:
     name: Trivy Config & Secret Scan
     runs-on: ubuntu-latest
@@ -43,3 +62,20 @@ jobs:
           scanners: misconfig,secret
           format: table
           exit-code: 1
+
+      - name: Run Trivy (misconfig + secrets — SARIF)
+        if: always()
+        uses: aquasecurity/trivy-action@e368e328979b113139d6f9068e03accaed98a518 # 0.34.1
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: misconfig,secret
+          format: sarif
+          output: trivy-config.sarif
+
+      - name: Upload Trivy SARIF (misconfig + secrets)
+        if: always()
+        uses: github/codeql-action/upload-sarif@89a39a4e59826350b863aa6b6252a07ad50cf83e # v4
+        with:
+          sarif_file: trivy-config.sarif
+          category: trivy-config-scan

@@ -195,8 +195,7 @@ jobs:
 
   dependency-review:
     name: Dependency Review
-    # Requires GHAS (free on public repos) — auto-activates when repo goes public
-    if: github.event_name == 'pull_request' && github.event.repository.visibility == 'public'
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: read
