@@ -34,6 +34,7 @@ jobs:
               - 'Package.resolved'
             rust:
               - 'windows/**'
+              - 'Examples/windows/SampleApp/src-tauri/**'
             sample-app:
               - 'Examples/windows/SampleApp/**'
               - '!Examples/windows/SampleApp/src-tauri/**'

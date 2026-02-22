@@ -5,10 +5,12 @@ on:
     branches: [main]
     paths:
       - "windows/**"
+      - "Examples/windows/SampleApp/src-tauri/**"
   pull_request:
     branches: [main]
     paths:
       - "windows/**"
+      - "Examples/windows/SampleApp/src-tauri/**"
   schedule:
     - cron: "0 7 * * 2" # Tuesday 7AM UTC
   workflow_dispatch:
