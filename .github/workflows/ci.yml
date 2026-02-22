@@ -7,6 +7,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -23,8 +26,8 @@ jobs:
       rust: ${{ github.event_name == 'push' || steps.filter.outputs.rust }}
       sample-app: ${{ github.event_name == 'push' || steps.filter.outputs.sample-app }}
     steps:
-      - uses: actions/checkout@v6
-      - uses: dorny/paths-filter@v3
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3
         id: filter
         with:
           filters: |
@@ -45,7 +48,7 @@ jobs:
     if: needs.changes.outputs.swift == 'true'
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Install SwiftLint
         run: |
@@ -74,10 +77,10 @@ jobs:
     if: needs.changes.outputs.swift == 'true'
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Cache SPM dependencies
-        uses: actions/cache@v5
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5
         with:
           path: |
             .build
@@ -97,13 +100,13 @@ jobs:
     if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
         with:
           workspaces: "windows -> windows/target"
 
@@ -123,13 +126,13 @@ jobs:
     if: needs.changes.outputs.rust == 'true'
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
         with:
           workspaces: "windows -> windows/target"
 
@@ -153,11 +156,11 @@ jobs:
           - package: audio-capture-windows
             os: windows-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - uses: dtolnay/rust-toolchain@stable
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
         with:
           workspaces: "windows -> windows/target"
 
@@ -173,9 +176,9 @@ jobs:
       run:
         working-directory: Examples/windows/SampleApp
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6
         with:
           node-version: 22
           cache: npm
@@ -199,8 +202,8 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/dependency-review-action@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/dependency-review-action@05fe4576374b728f0c523d6a13d64c25081e0803 # v4
         with:
           fail-on-severity: high
           deny-licenses: GPL-2.0, GPL-3.0, AGPL-3.0

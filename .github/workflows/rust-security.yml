@@ -15,13 +15,16 @@ on:
     - cron: "0 7 * * 2" # Tuesday 7AM UTC
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   cargo-audit:
     name: cargo audit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-      - uses: rustsec/audit-check@v2
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: rustsec/audit-check@69366f33c96575abad1ee0dba8212993eecbe998 # v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           working-directory: windows
@@ -30,7 +33,7 @@ jobs:
     name: cargo deny
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-      - uses: EmbarkStudios/cargo-deny-action@v2
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: EmbarkStudios/cargo-deny-action@3fd3802e88374d3fe9159b834c7714ec57d6c979 # v2
         with:
           manifest-path: windows/Cargo.toml
