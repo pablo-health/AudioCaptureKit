@@ -9,8 +9,7 @@ use crate::models::error::CaptureError;
 /// - `samples`: Interleaved f32 samples (mono for mic, stereo for system).
 /// - `sample_rate`: The actual sample rate of the delivered audio.
 /// - `channels`: Number of channels (1 = mono, 2 = stereo interleaved).
-pub type AudioBufferCallback =
-    Arc<dyn Fn(&[f32], f64, u16) + Send + Sync + 'static>;
+pub type AudioBufferCallback = Arc<dyn Fn(&[f32], f64, u16) + Send + Sync + 'static>;
 
 /// Interface for platform-specific audio capture sources.
 ///

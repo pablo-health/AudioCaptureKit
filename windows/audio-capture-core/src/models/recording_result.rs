@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use super::audio_models::{AudioTrack, AudioTrackType, AudioChannel};
+use super::audio_models::{AudioChannel, AudioTrack, AudioTrackType};
 
 /// Result returned when a capture session completes successfully.
 #[derive(Debug, Clone, PartialEq)]

@@ -7,8 +7,8 @@
 use windows::Win32::Devices::FunctionDiscovery::*;
 use windows::Win32::Foundation::PROPERTYKEY;
 use windows::Win32::Media::Audio::*;
-use windows::Win32::System::Com::*;
 use windows::Win32::System::Com::StructuredStorage::PropVariantToStringAlloc;
+use windows::Win32::System::Com::*;
 use windows::Win32::UI::Shell::PropertiesSystem::IPropertyStore;
 
 use audio_capture_core::models::audio_models::{AudioSource, AudioTrackType, AudioTransportType};
@@ -25,9 +25,8 @@ impl DeviceEnumerator {
     /// Requires COM to be initialized on the calling thread.
     pub fn new() -> Result<Self, CaptureError> {
         unsafe {
-            let enumerator: IMMDeviceEnumerator =
-                CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)
-                    .map_err(|e| CaptureError::Unknown(format!("failed to create enumerator: {}", e)))?;
+            let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)
+                .map_err(|e| CaptureError::Unknown(format!("failed to create enumerator: {}", e)))?;
             Ok(Self { enumerator })
         }
     }

@@ -27,10 +27,7 @@ public final class CoreAudioTapCapture: AudioCaptureProvider, @unchecked Sendabl
     private let state = UnfairLock(State())
     private let ioQueue = DispatchQueue(label: "com.audiocapturekit.system-audio-io", qos: .userInitiated)
 
-    private let logger = Logger(
-        subsystem: "com.audiocapturekit",
-        category: "CoreAudioTapCapture"
-    )
+    private let logger = Logger(subsystem: "com.audiocapturekit", category: "CoreAudioTapCapture")
 
     public init() {}
 
@@ -76,7 +73,41 @@ public final class CoreAudioTapCapture: AudioCaptureProvider, @unchecked Sendabl
 
     @available(macOS 14.2, *)
     private func startTap(callback: @escaping AudioBufferCallback) throws {
-        // Step 1: Create a tap for all system audio
+        let (tapID, tapDescription) = try createProcessTap()
+        let outputUID = try Self.defaultOutputDeviceUID()
+
+        let tapFormat = Self.readTapFormat(tapID)
+        let sampleRate = tapFormat?.mSampleRate ?? Self.queryDeviceSampleRate(tapID)
+
+        let aggregateDeviceID = try createAggregateDevice(
+            outputUID: outputUID,
+            tapUUID: tapDescription.uuid,
+            tapID: tapID
+        )
+
+        let (actualSampleRate, resolvedFormat) = resolveAggregateFormat(
+            aggregateDeviceID: aggregateDeviceID,
+            tapFormat: tapFormat,
+            tapSampleRate: sampleRate
+        )
+
+        state.withLock {
+            $0.bufferCallback = callback
+            $0.tapID = tapID
+            $0.aggregateDeviceID = aggregateDeviceID
+            $0.sampleRate = actualSampleRate
+            $0.tapStreamFormat = resolvedFormat
+        }
+
+        try startAggregateIO(
+            aggregateDeviceID: aggregateDeviceID,
+            tapID: tapID
+        )
+    }
+
+    /// Creates a Core Audio process tap for all system audio.
+    @available(macOS 14.2, *)
+    private func createProcessTap() throws -> (AudioObjectID, CATapDescription) {
         let tapDescription = CATapDescription(stereoGlobalTapButExcludeProcesses: [])
         tapDescription.uuid = UUID()
         tapDescription.name = "AudioCaptureKit System Audio"
@@ -91,16 +122,16 @@ public final class CoreAudioTapCapture: AudioCaptureProvider, @unchecked Sendabl
         }
 
         logger.info("Created process tap: \(tapID)")
+        return (tapID, tapDescription)
+    }
 
-        // Step 2: Get the default system output device UID
-        let outputUID = try Self.defaultOutputDeviceUID()
-
-        // Step 3: Get the tap's stream format for sample rate
-        let tapFormat = Self.readTapFormat(tapID)
-        let sampleRate = tapFormat?.mSampleRate ?? Self.queryDeviceSampleRate(tapID)
-        logger.info("Tap format: sampleRate=\(sampleRate), channels=\(tapFormat?.mChannelsPerFrame ?? 0)")
-
-        // Step 4: Create an aggregate device that wraps the tap
+    /// Creates an aggregate device wrapping the given tap and output device.
+    @available(macOS 14.2, *)
+    private func createAggregateDevice(
+        outputUID: String,
+        tapUUID: UUID,
+        tapID: AudioObjectID
+    ) throws -> AudioObjectID {
         let aggregateUID = UUID().uuidString
         let description: [String: Any] = [
             kAudioAggregateDeviceNameKey: "AudioCaptureKit-SystemAudio",
@@ -110,64 +141,64 @@ public final class CoreAudioTapCapture: AudioCaptureProvider, @unchecked Sendabl
             kAudioAggregateDeviceIsStackedKey: false,
             kAudioAggregateDeviceTapAutoStartKey: true,
             kAudioAggregateDeviceSubDeviceListKey: [
-                [kAudioSubDeviceUIDKey: outputUID]
+                [kAudioSubDeviceUIDKey: outputUID],
             ],
             kAudioAggregateDeviceTapListKey: [
                 [
                     kAudioSubTapDriftCompensationKey: true,
-                    kAudioSubTapUIDKey: tapDescription.uuid.uuidString
-                ]
-            ]
+                    kAudioSubTapUIDKey: tapUUID.uuidString,
+                ],
+            ],
         ]
 
         var aggregateDeviceID: AudioObjectID = kAudioObjectUnknown
-        let aggregateStatus = AudioHardwareCreateAggregateDevice(
+        let status = AudioHardwareCreateAggregateDevice(
             description as CFDictionary, &aggregateDeviceID
         )
 
-        guard aggregateStatus == noErr, aggregateDeviceID != kAudioObjectUnknown else {
+        guard status == noErr, aggregateDeviceID != kAudioObjectUnknown else {
             AudioHardwareDestroyProcessTap(tapID)
             throw CaptureError.configurationFailed(
-                "Failed to create aggregate device: OSStatus \(aggregateStatus)"
+                "Failed to create aggregate device: OSStatus \(status)"
             )
         }
 
         logger.info("Created aggregate device: \(aggregateDeviceID)")
+        return aggregateDeviceID
+    }
 
-        // Query the aggregate device's actual input stream format.
-        // This may differ from the tap format when the output device runs at
-        // a different sample rate (e.g. AirPods in HFP mode at ~16kHz).
+    /// Resolves the actual sample rate and stream format from the aggregate device.
+    private func resolveAggregateFormat(
+        aggregateDeviceID: AudioObjectID,
+        tapFormat: AudioStreamBasicDescription?,
+        tapSampleRate: Double
+    ) -> (sampleRate: Double, format: AudioStreamBasicDescription?) {
         let aggregateFormat = Self.readDeviceInputFormat(aggregateDeviceID)
-        let actualSampleRate = aggregateFormat?.mSampleRate ?? sampleRate
-        logger.info("Aggregate device format: sampleRate=\(actualSampleRate), channels=\(aggregateFormat?.mChannelsPerFrame ?? 0), tap sampleRate=\(sampleRate)")
+        let actualSampleRate = aggregateFormat?.mSampleRate ?? tapSampleRate
+        let aggChannels = aggregateFormat?.mChannelsPerFrame ?? 0
+        logger.info(
+            "Aggregate format: rate=\(actualSampleRate), ch=\(aggChannels), tapRate=\(tapSampleRate)"
+        )
+        // Prefer the aggregate device's format over the tap format,
+        // since the IO callback delivers data in the aggregate's format.
+        return (actualSampleRate, aggregateFormat ?? tapFormat)
+    }
 
-        state.withLock {
-            $0.bufferCallback = callback
-            $0.tapID = tapID
-            $0.aggregateDeviceID = aggregateDeviceID
-            $0.sampleRate = actualSampleRate
-            // Prefer the aggregate device's format over the tap format,
-            // since the IO callback delivers data in the aggregate's format.
-            $0.tapStreamFormat = aggregateFormat ?? tapFormat
-        }
-
-        // Step 5: Create an I/O proc on the aggregate device (NOT on the tap directly)
+    /// Creates an I/O proc on the aggregate device and starts audio I/O.
+    private func startAggregateIO(
+        aggregateDeviceID: AudioObjectID,
+        tapID: AudioObjectID
+    ) throws {
         var ioProcID: AudioDeviceIOProcID?
 
         let ioStatus = AudioDeviceCreateIOProcIDWithBlock(
             &ioProcID, aggregateDeviceID, ioQueue
-        ) { [weak self] inNow, inInputData, inInputTime, outOutputData, outOutputTime in
+        ) { [weak self] _, inInputData, inInputTime, _, _ in
             self?.handleIOBuffer(inInputData: inInputData, inInputTime: inInputTime)
         }
 
         guard ioStatus == noErr, let procID = ioProcID else {
-            AudioHardwareDestroyAggregateDevice(aggregateDeviceID)
-            AudioHardwareDestroyProcessTap(tapID)
-            state.withLock {
-                $0.tapID = kAudioObjectUnknown
-                $0.aggregateDeviceID = kAudioObjectUnknown
-                $0.bufferCallback = nil
-            }
+            tearDownAudioResources(aggregateID: aggregateDeviceID, tapID: tapID)
             throw CaptureError.configurationFailed(
                 "Failed to create I/O proc: OSStatus \(ioStatus)"
             )
@@ -178,37 +209,50 @@ public final class CoreAudioTapCapture: AudioCaptureProvider, @unchecked Sendabl
             $0.isCapturing = true
         }
 
-        // Step 6: Start the aggregate device
         let startStatus = AudioDeviceStart(aggregateDeviceID, procID)
         guard startStatus == noErr else {
             AudioDeviceDestroyIOProcID(aggregateDeviceID, procID)
-            AudioHardwareDestroyAggregateDevice(aggregateDeviceID)
-            AudioHardwareDestroyProcessTap(tapID)
-            state.withLock {
-                $0.tapID = kAudioObjectUnknown
-                $0.aggregateDeviceID = kAudioObjectUnknown
-                $0.ioProcID = nil
-                $0.isCapturing = false
-                $0.bufferCallback = nil
-            }
+            tearDownAudioResources(aggregateID: aggregateDeviceID, tapID: tapID)
             throw CaptureError.configurationFailed(
                 "Failed to start aggregate device: OSStatus \(startStatus)"
             )
         }
     }
 
+    /// Destroys the aggregate device and process tap, resetting state.
+    private func tearDownAudioResources(
+        aggregateID: AudioObjectID,
+        tapID: AudioObjectID
+    ) {
+        if aggregateID != kAudioObjectUnknown {
+            AudioHardwareDestroyAggregateDevice(aggregateID)
+        }
+        if tapID != kAudioObjectUnknown {
+            if #available(macOS 14.2, *) {
+                AudioHardwareDestroyProcessTap(tapID)
+            }
+        }
+        state.withLock {
+            $0.tapID = kAudioObjectUnknown
+            $0.aggregateDeviceID = kAudioObjectUnknown
+            $0.ioProcID = nil
+            $0.isCapturing = false
+            $0.bufferCallback = nil
+        }
+    }
+
     @available(macOS 14.2, *)
     private func stopTap() {
-        let (tapID, aggregateID, ioProcID) = state.withLock { s in
-            let t = s.tapID
-            let a = s.aggregateDeviceID
-            let p = s.ioProcID
-            s.isCapturing = false
-            s.bufferCallback = nil
-            s.tapID = kAudioObjectUnknown
-            s.aggregateDeviceID = kAudioObjectUnknown
-            s.ioProcID = nil
-            return (t, a, p)
+        let (tapID, aggregateID, ioProcID) = state.withLock { current in
+            let tap = current.tapID
+            let aggregate = current.aggregateDeviceID
+            let proc = current.ioProcID
+            current.isCapturing = false
+            current.bufferCallback = nil
+            current.tapID = kAudioObjectUnknown
+            current.aggregateDeviceID = kAudioObjectUnknown
+            current.ioProcID = nil
+            return (tap, aggregate, proc)
         }
 
         // Tear down in reverse order: stop -> destroy IO proc -> destroy aggregate -> destroy tap
@@ -248,18 +292,18 @@ public final class CoreAudioTapCapture: AudioCaptureProvider, @unchecked Sendabl
         // and channel layout match the actual data.
         let format: AVAudioFormat
         if var desc = tapFormat {
-            guard let f = AVAudioFormat(streamDescription: &desc) else { return }
-            format = f
+            guard let tapAudioFormat = AVAudioFormat(streamDescription: &desc) else { return }
+            format = tapAudioFormat
         } else {
             // Fallback: infer from buffer metadata
             let channelCount = firstBuffer.mNumberChannels
-            guard let f = AVAudioFormat(
+            guard let inferredFormat = AVAudioFormat(
                 commonFormat: .pcmFormatFloat32,
                 sampleRate: sampleRate,
                 channels: AVAudioChannelCount(channelCount),
                 interleaved: false
             ) else { return }
-            format = f
+            format = inferredFormat
         }
 
         guard let pcmBuffer = AVAudioPCMBuffer(
@@ -276,10 +320,12 @@ public final class CoreAudioTapCapture: AudioCaptureProvider, @unchecked Sendabl
         callback(pcmBuffer, audioTime)
     }
 
-    // MARK: - Helpers
+}
 
-    /// Queries the nominal sample rate from a Core Audio device.
-    private static func queryDeviceSampleRate(_ deviceID: AudioObjectID) -> Double {
+// MARK: - Core Audio Helpers
+
+extension CoreAudioTapCapture {
+    static func queryDeviceSampleRate(_ deviceID: AudioObjectID) -> Double {
         var sampleRate: Float64 = 0
         var size = UInt32(MemoryLayout<Float64>.size)
         var address = AudioObjectPropertyAddress(
@@ -292,8 +338,7 @@ public final class CoreAudioTapCapture: AudioCaptureProvider, @unchecked Sendabl
         return sampleRate
     }
 
-    /// Reads the input stream format of a Core Audio device (e.g. the aggregate device).
-    private static func readDeviceInputFormat(_ deviceID: AudioObjectID) -> AudioStreamBasicDescription? {
+    static func readDeviceInputFormat(_ deviceID: AudioObjectID) -> AudioStreamBasicDescription? {
         var format = AudioStreamBasicDescription()
         var size = UInt32(MemoryLayout<AudioStreamBasicDescription>.size)
         var address = AudioObjectPropertyAddress(
@@ -306,8 +351,7 @@ public final class CoreAudioTapCapture: AudioCaptureProvider, @unchecked Sendabl
         return format
     }
 
-    /// Reads the tap's audio stream format.
-    private static func readTapFormat(_ tapID: AudioObjectID) -> AudioStreamBasicDescription? {
+    static func readTapFormat(_ tapID: AudioObjectID) -> AudioStreamBasicDescription? {
         var format = AudioStreamBasicDescription()
         var size = UInt32(MemoryLayout<AudioStreamBasicDescription>.size)
         var address = AudioObjectPropertyAddress(
@@ -320,8 +364,7 @@ public final class CoreAudioTapCapture: AudioCaptureProvider, @unchecked Sendabl
         return format
     }
 
-    /// Returns the UID string of the default system output device.
-    private static func defaultOutputDeviceUID() throws -> String {
+    static func defaultOutputDeviceUID() throws -> String {
         var deviceID: AudioDeviceID = 0
         var size = UInt32(MemoryLayout<AudioDeviceID>.size)
         var address = AudioObjectPropertyAddress(

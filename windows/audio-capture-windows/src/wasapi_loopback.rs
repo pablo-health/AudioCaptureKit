@@ -73,9 +73,7 @@ impl CaptureProvider for WasapiLoopbackCapture {
                 }
                 running.store(false, Ordering::SeqCst);
             })
-            .map_err(|e| {
-                CaptureError::Unknown(format!("failed to spawn loopback thread: {}", e))
-            })?;
+            .map_err(|e| CaptureError::Unknown(format!("failed to spawn loopback thread: {}", e)))?;
 
         *self.capture_handle.lock() = Some(handle);
         Ok(())
@@ -110,10 +108,7 @@ impl CaptureProvider for WasapiLoopbackCapture {
 /// 5. Get IAudioCaptureClient
 /// 6. Register with MMCSS
 /// 7. Start, poll for buffers
-fn loopback_capture_loop(
-    running: Arc<AtomicBool>,
-    callback: AudioBufferCallback,
-) -> Result<(), CaptureError> {
+fn loopback_capture_loop(running: Arc<AtomicBool>, callback: AudioBufferCallback) -> Result<(), CaptureError> {
     unsafe {
         CoInitializeEx(None, COINIT_MULTITHREADED)
             .ok()
@@ -122,8 +117,7 @@ fn loopback_capture_loop(
         let _com_guard = CoUninitializeGuard;
 
         let enumerator: IMMDeviceEnumerator =
-            CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)
-                .map_err(|_| CaptureError::DeviceNotAvailable)?;
+            CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL).map_err(|_| CaptureError::DeviceNotAvailable)?;
 
         // Get default RENDER endpoint (not capture — loopback reads from render)
         let device = enumerator
@@ -155,25 +149,17 @@ fn loopback_capture_loop(
                 None,
             )
             .map_err(|e| {
-                CaptureError::ConfigurationFailed(format!(
-                    "IAudioClient::Initialize (loopback) failed: {}",
-                    e
-                ))
+                CaptureError::ConfigurationFailed(format!("IAudioClient::Initialize (loopback) failed: {}", e))
             })?;
 
         let capture_client: IAudioCaptureClient = audio_client
             .GetService()
-            .map_err(|e| {
-                CaptureError::ConfigurationFailed(format!("GetService failed: {}", e))
-            })?;
+            .map_err(|e| CaptureError::ConfigurationFailed(format!("GetService failed: {}", e)))?;
 
         // MMCSS registration for real-time priority
         let mut task_index: u32 = 0;
         let task_name: Vec<u16> = "Pro Audio\0".encode_utf16().collect();
-        let _mmcss_handle = AvSetMmThreadCharacteristicsW(
-            PCWSTR(task_name.as_ptr()),
-            &mut task_index,
-        );
+        let _mmcss_handle = AvSetMmThreadCharacteristicsW(PCWSTR(task_name.as_ptr()), &mut task_index);
 
         audio_client
             .Start()
@@ -193,13 +179,7 @@ fn loopback_capture_loop(
                 let mut flags: u32 = 0;
 
                 capture_client
-                    .GetBuffer(
-                        &mut buffer_ptr,
-                        &mut num_frames,
-                        &mut flags,
-                        None,
-                        None,
-                    )
+                    .GetBuffer(&mut buffer_ptr, &mut num_frames, &mut flags, None, None)
                     .map_err(|e| CaptureError::Unknown(format!("GetBuffer failed: {}", e)))?;
 
                 if num_frames > 0 && !buffer_ptr.is_null() {
