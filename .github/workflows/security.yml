@@ -14,10 +14,10 @@ jobs:
     name: Trivy Dependency Scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Run Trivy (vulnerabilities)
-        uses: aquasecurity/trivy-action@0.34.0
+        uses: aquasecurity/trivy-action@0.34.1
         with:
           scan-type: fs
           scan-ref: .
@@ -30,10 +30,10 @@ jobs:
     name: Trivy Config & Secret Scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Run Trivy (misconfig + secrets)
-        uses: aquasecurity/trivy-action@0.34.0
+        uses: aquasecurity/trivy-action@0.34.1
         with:
           scan-type: fs
           scan-ref: .
