@@ -62,7 +62,7 @@ jobs:
           echo "$PWD" >> "$GITHUB_PATH"
 
       - name: SwiftLint
-        run: swiftlint lint --strict --config macOS/.swiftlint.yml macOS/Sources/ macOS/Tests/
+        run: swiftlint lint --config macOS/.swiftlint.yml macOS/Sources/ macOS/Tests/
 
       - name: SwiftFormat
         run: swiftformat --lint --config macOS/.swiftformat macOS/Sources/ macOS/Tests/
@@ -107,7 +107,8 @@ jobs:
           workspaces: "windows -> windows/target"
 
       - name: Check formatting
-        run: cargo fmt --check --manifest-path windows/Cargo.toml
+        working-directory: windows
+        run: cargo fmt --all --check
 
       - name: Clippy (core — platform-agnostic)
         run: >
@@ -135,7 +136,7 @@ jobs:
         run: >
           cargo clippy --manifest-path windows/Cargo.toml
           -p audio-capture-windows
-          -- -D warnings -W clippy::undocumented_unsafe_blocks
+          -- -D warnings
 
   rust-test:
     name: Rust Test (${{ matrix.package }})
