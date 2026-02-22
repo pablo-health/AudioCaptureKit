@@ -1,6 +1,6 @@
+@testable import AudioCaptureKit
 import Foundation
 import Testing
-@testable import AudioCaptureKit
 
 @Suite("AudioFormatConverter Tests")
 struct AudioFormatConverterTests {
@@ -18,7 +18,7 @@ struct AudioFormatConverterTests {
         let header = AudioFormatConverter.generateWAVHeader(
             sampleRate: 48000, bitDepth: 16, channels: 2, dataSize: 1000
         )
-        #expect(String(data: header[0..<4], encoding: .ascii) == "RIFF")
+        #expect(String(data: header[0 ..< 4], encoding: .ascii) == "RIFF")
     }
 
     @Test("WAV header contains WAVE format")
@@ -26,7 +26,7 @@ struct AudioFormatConverterTests {
         let header = AudioFormatConverter.generateWAVHeader(
             sampleRate: 48000, bitDepth: 16, channels: 2, dataSize: 1000
         )
-        #expect(String(data: header[8..<12], encoding: .ascii) == "WAVE")
+        #expect(String(data: header[8 ..< 12], encoding: .ascii) == "WAVE")
     }
 
     @Test("WAV header contains fmt chunk")
@@ -34,7 +34,7 @@ struct AudioFormatConverterTests {
         let header = AudioFormatConverter.generateWAVHeader(
             sampleRate: 48000, bitDepth: 16, channels: 2, dataSize: 1000
         )
-        #expect(String(data: header[12..<16], encoding: .ascii) == "fmt ")
+        #expect(String(data: header[12 ..< 16], encoding: .ascii) == "fmt ")
     }
 
     @Test("WAV header contains data chunk")
@@ -42,7 +42,7 @@ struct AudioFormatConverterTests {
         let header = AudioFormatConverter.generateWAVHeader(
             sampleRate: 48000, bitDepth: 16, channels: 2, dataSize: 1000
         )
-        #expect(String(data: header[36..<40], encoding: .ascii) == "data")
+        #expect(String(data: header[36 ..< 40], encoding: .ascii) == "data")
     }
 
     @Test("WAV header encodes correct sample rate")
@@ -78,7 +78,7 @@ struct AudioFormatConverterTests {
             sampleRate: 48000, bitDepth: 16, channels: 2, dataSize: 0
         )
         let byteRate = header.withUnsafeBytes { $0.load(fromByteOffset: 28, as: UInt32.self) }
-        #expect(byteRate == 192000)
+        #expect(byteRate == 192_000)
     }
 
     @Test("WAV header block align is correct")
@@ -102,7 +102,7 @@ struct AudioFormatConverterTests {
 
     @Test("WAV header data size field")
     func wavHeaderDataSize() {
-        let dataSize: UInt32 = 192000
+        let dataSize: UInt32 = 192_000
         let header = AudioFormatConverter.generateWAVHeader(
             sampleRate: 48000, bitDepth: 16, channels: 2, dataSize: dataSize
         )

@@ -4,7 +4,6 @@
 /// for updating header fields after recording completes.
 ///
 /// Ports Swift's `AudioFormatConverter.generateWAVHeader` byte-for-byte.
-
 /// Size of the standard WAV RIFF header in bytes.
 pub const WAV_HEADER_SIZE: usize = 44;
 
@@ -28,12 +27,7 @@ pub const WAV_HEADER_SIZE: usize = 44;
 /// [36-39]  "data"
 /// [40-43]  data_size
 /// ```
-pub fn generate_wav_header(
-    sample_rate: u32,
-    bit_depth: u16,
-    channels: u16,
-    data_size: u32,
-) -> [u8; WAV_HEADER_SIZE] {
+pub fn generate_wav_header(sample_rate: u32, bit_depth: u16, channels: u16, data_size: u32) -> [u8; WAV_HEADER_SIZE] {
     let byte_rate = sample_rate * channels as u32 * bit_depth as u32 / 8;
     let block_align = channels * bit_depth / 8;
     let chunk_size = 36 + data_size;
@@ -129,10 +123,7 @@ mod tests {
         // Format code = 1 (PCM)
         assert_eq!(u16::from_le_bytes([header[20], header[21]]), 1);
         // fmt chunk size = 16
-        assert_eq!(
-            u32::from_le_bytes([header[16], header[17], header[18], header[19]]),
-            16
-        );
+        assert_eq!(u32::from_le_bytes([header[16], header[17], header[18], header[19]]), 16);
     }
 
     #[test]

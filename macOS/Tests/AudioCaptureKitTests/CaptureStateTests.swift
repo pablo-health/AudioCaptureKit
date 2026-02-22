@@ -1,28 +1,36 @@
-import Testing
-import Foundation
 @testable import AudioCaptureKit
+import Foundation
+import Testing
 
 @Suite("CaptureState Tests")
 struct CaptureStateTests {
 
     @Test("Idle state equality")
     func idleEquality() {
-        #expect(CaptureState.idle == CaptureState.idle)
+        let state1 = CaptureState.idle
+        let state2 = CaptureState.idle
+        #expect(state1 == state2)
     }
 
     @Test("Configuring state equality")
     func configuringEquality() {
-        #expect(CaptureState.configuring == CaptureState.configuring)
+        let state1 = CaptureState.configuring
+        let state2 = CaptureState.configuring
+        #expect(state1 == state2)
     }
 
     @Test("Ready state equality")
     func readyEquality() {
-        #expect(CaptureState.ready == CaptureState.ready)
+        let state1 = CaptureState.ready
+        let state2 = CaptureState.ready
+        #expect(state1 == state2)
     }
 
     @Test("Capturing state equality with same duration")
     func capturingEqualitySameDuration() {
-        #expect(CaptureState.capturing(duration: 10.0) == CaptureState.capturing(duration: 10.0))
+        let state1 = CaptureState.capturing(duration: 10.0)
+        let state2 = CaptureState.capturing(duration: 10.0)
+        #expect(state1 == state2)
     }
 
     @Test("Capturing state inequality with different duration")
@@ -32,7 +40,9 @@ struct CaptureStateTests {
 
     @Test("Paused state equality with same duration")
     func pausedEqualitySameDuration() {
-        #expect(CaptureState.paused(duration: 5.0) == CaptureState.paused(duration: 5.0))
+        let state1 = CaptureState.paused(duration: 5.0)
+        let state2 = CaptureState.paused(duration: 5.0)
+        #expect(state1 == state2)
     }
 
     @Test("Paused state inequality with different duration")
@@ -42,13 +52,19 @@ struct CaptureStateTests {
 
     @Test("Stopping state equality")
     func stoppingEquality() {
-        #expect(CaptureState.stopping == CaptureState.stopping)
+        let state1 = CaptureState.stopping
+        let state2 = CaptureState.stopping
+        #expect(state1 == state2)
     }
 
     @Test("Failed state equality with same error")
     func failedEqualitySameError() {
-        #expect(CaptureState.failed(.permissionDenied) == CaptureState.failed(.permissionDenied))
-        #expect(CaptureState.failed(.timeout) == CaptureState.failed(.timeout))
+        let state1 = CaptureState.failed(.permissionDenied)
+        let state2 = CaptureState.failed(.permissionDenied)
+        #expect(state1 == state2)
+        let state3 = CaptureState.failed(.timeout)
+        let state4 = CaptureState.failed(.timeout)
+        #expect(state3 == state4)
     }
 
     @Test("Failed state inequality with different errors")
@@ -102,7 +118,7 @@ struct CaptureStateTests {
             isEncrypted: true,
             tracks: [
                 AudioTrack(type: .mic, channel: .left),
-                AudioTrack(type: .system, channel: .right)
+                AudioTrack(type: .system, channel: .right),
             ],
             encryptionAlgorithm: "AES-256-GCM"
         )
@@ -113,7 +129,7 @@ struct CaptureStateTests {
         let states: [CaptureState] = [
             .ready, .capturing(duration: 0), .capturing(duration: 10),
             .paused(duration: 10), .capturing(duration: 10),
-            .capturing(duration: 25), .stopping, .completed(result)
+            .capturing(duration: 25), .stopping, .completed(result),
         ]
         #expect(states.count == 8)
         #expect(states.first == .ready)
@@ -126,7 +142,7 @@ struct CaptureStateTests {
             .permissionDenied, .deviceNotAvailable,
             .configurationFailed("test"), .encodingFailed("test"),
             .encryptionFailed("test"), .storageError("test"),
-            .timeout, .unknown("test")
+            .timeout, .unknown("test"),
         ]
         #expect(errors.count == 8)
         #expect(errors[0] != errors[1])

@@ -148,9 +148,7 @@ impl<M: CaptureProvider, S: CaptureProvider> CompositeSession<M, S> {
             }
         }
 
-        config
-            .validate()
-            .map_err(CaptureError::ConfigurationFailed)?;
+        config.validate().map_err(CaptureError::ConfigurationFailed)?;
 
         self.set_state(CaptureState::Configuring);
 
@@ -186,14 +184,8 @@ impl<M: CaptureProvider, S: CaptureProvider> CompositeSession<M, S> {
 
         // Set up file writer
         let file_name = format!("recording_{}", uuid::Uuid::new_v4());
-        let file_ext = if config.encryptor.is_some() {
-            "enc.wav"
-        } else {
-            "wav"
-        };
-        let file_path = config
-            .output_directory
-            .join(format!("{}.{}", file_name, file_ext));
+        let file_ext = if config.encryptor.is_some() { "enc.wav" } else { "wav" };
+        let file_path = config.output_directory.join(format!("{}.{}", file_name, file_ext));
         self.file_path = Some(file_path.clone());
 
         let mut writer = EncryptedFileWriter::new(file_path, config.encryptor.clone());
@@ -251,8 +243,7 @@ impl<M: CaptureProvider, S: CaptureProvider> CompositeSession<M, S> {
                 };
 
                 // Update levels (use left channel for RMS)
-                let left_samples: Vec<f32> =
-                    resampled.iter().step_by(2).copied().collect();
+                let left_samples: Vec<f32> = resampled.iter().step_by(2).copied().collect();
                 let rms = StereoMixer::rms_level(&left_samples);
                 let peak = StereoMixer::peak_level(&left_samples);
                 {
@@ -407,7 +398,7 @@ impl<M: CaptureProvider, S: CaptureProvider> CompositeSession<M, S> {
             checksum,
         };
 
-        self.set_state(CaptureState::Completed(result.clone()));
+        self.set_state(CaptureState::Completed(Box::new(result.clone())));
 
         if let Some(ref delegate) = self.delegate {
             delegate.on_capture_finished(&result);
@@ -442,11 +433,7 @@ impl<M: CaptureProvider, S: CaptureProvider> CompositeSession<M, S> {
         let sys_buf = Arc::clone(&self.system_buffer);
         let writer = Arc::clone(&self.writer);
         let mixer = self.mixer.clone();
-        let enable_system = self
-            .config
-            .as_ref()
-            .map(|c| c.enable_system_capture)
-            .unwrap_or(false);
+        let enable_system = self.config.as_ref().map(|c| c.enable_system_capture).unwrap_or(false);
 
         let chunk_size = (output_rate * 0.1) as usize; // 100ms of frames
 
@@ -498,9 +485,7 @@ impl<M: CaptureProvider, S: CaptureProvider> CompositeSession<M, S> {
                     let mut s = session_state.lock();
                     if let CaptureState::Capturing { .. } = &s.state {
                         let dur = s.elapsed_duration();
-                        s.state = CaptureState::Capturing {
-                            duration_secs: dur,
-                        };
+                        s.state = CaptureState::Capturing { duration_secs: dur };
                         let levels = s.levels;
                         drop(s);
 

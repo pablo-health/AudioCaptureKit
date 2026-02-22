@@ -46,7 +46,7 @@ public struct StereoMixer: Sendable {
         guard frameCount > 0 else { return [] }
 
         var stereo = [Float](repeating: 0, count: frameCount * 2)
-        for i in 0..<frameCount {
+        for i in 0 ..< frameCount {
             let micSample = i < micFrames ? mic[i] : 0
             let sysL = (i * 2) < system.count ? system[i * 2] : 0
             let sysR = (i * 2 + 1) < system.count ? system[i * 2 + 1] : 0
@@ -71,7 +71,7 @@ public struct StereoMixer: Sendable {
         guard frameCount > 0 else { return [] }
 
         var stereo = [Float](repeating: 0, count: frameCount * 2)
-        for i in 0..<frameCount {
+        for i in 0 ..< frameCount {
             stereo[i * 2] = i < leftSamples.count ? leftSamples[i] : 0
             stereo[i * 2 + 1] = i < rightSamples.count ? rightSamples[i] : 0
         }
@@ -111,7 +111,7 @@ public struct StereoMixer: Sendable {
         guard outputCount > 0 else { return [] }
 
         var output = [Float](repeating: 0, count: outputCount)
-        for i in 0..<outputCount {
+        for i in 0 ..< outputCount {
             let sourceIndex = Double(i) / ratio
             let index = Int(sourceIndex)
             let fraction = Float(sourceIndex - Double(index))
@@ -145,12 +145,12 @@ public struct StereoMixer: Sendable {
         guard outputFrames > 0 else { return [] }
 
         var output = [Float](repeating: 0, count: outputFrames * 2)
-        for i in 0..<outputFrames {
+        for i in 0 ..< outputFrames {
             let sourceIndex = Double(i) / ratio
             let index = Int(sourceIndex)
             let fraction = Float(sourceIndex - Double(index))
 
-            for ch in 0..<2 {
+            for ch in 0 ..< 2 {
                 if index + 1 < frameCount {
                     output[i * 2 + ch] = samples[index * 2 + ch] * (1 - fraction)
                         + samples[(index + 1) * 2 + ch] * fraction

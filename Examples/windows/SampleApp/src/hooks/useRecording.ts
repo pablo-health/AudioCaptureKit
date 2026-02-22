@@ -51,6 +51,7 @@ export function useRecording() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef = useRef<number>(0);
   const pausedDurationRef = useRef<number>(0);
+  const pauseStartRef = useRef<number>(0);
 
   useEffect(() => {
     if (state === "capturing") {
@@ -66,17 +67,8 @@ export function useRecording() {
         clearInterval(timerRef.current);
         timerRef.current = null;
       }
-      const pauseStart = Date.now();
-      // Track paused time when we resume
-      const prevPaused = pausedDurationRef.current;
-      pausedDurationRef.current = -1; // sentinel
-      // Store pause start for resume calculation
-      startTimeRef.current && (pausedDurationRef.current = prevPaused);
-      // We'll fix the paused duration on resume
-      const savedPauseStart = Date.now();
-      pausedDurationRef.current = prevPaused;
-      // Override: store pause start time in a separate ref
-      (pausedDurationRef as any)._pauseStart = savedPauseStart;
+      // Record when the pause started so we can accumulate paused time on resume
+      pauseStartRef.current = Date.now();
     } else if (state === "idle" || state === "completed" || state === "failed") {
       if (timerRef.current) {
         clearInterval(timerRef.current);
@@ -84,6 +76,7 @@ export function useRecording() {
       }
       startTimeRef.current = 0;
       pausedDurationRef.current = 0;
+      pauseStartRef.current = 0;
     }
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
@@ -106,8 +99,9 @@ export function useRecording() {
           setState((prev) => {
             // Track pause duration on resume
             if (prev === "paused" && newState === "capturing") {
-              const pauseStart = (pausedDurationRef as any)._pauseStart || Date.now();
-              pausedDurationRef.current += (Date.now() - pauseStart) / 1000;
+              const pauseEnd = Date.now();
+              pausedDurationRef.current += (pauseEnd - (pauseStartRef.current || pauseEnd)) / 1000;
+              pauseStartRef.current = 0;
             }
             return newState;
           });
@@ -158,6 +152,7 @@ export function useRecording() {
     setDuration(0);
     startTimeRef.current = 0;
     pausedDurationRef.current = 0;
+    pauseStartRef.current = 0;
     setLevels({ micLevel: 0, systemLevel: 0, peakMicLevel: 0, peakSystemLevel: 0 });
     try {
       await commands.startRecording(config);

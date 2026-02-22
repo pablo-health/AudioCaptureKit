@@ -24,7 +24,9 @@ pub mod storage;
 pub mod traits;
 
 // Re-export key types at crate root for convenience.
-pub use models::audio_models::{AudioChannel, AudioLevels, AudioSource, AudioTrack, AudioTrackType, AudioTransportType};
+pub use models::audio_models::{
+    AudioChannel, AudioLevels, AudioSource, AudioTrack, AudioTrackType, AudioTransportType,
+};
 pub use models::config::CaptureConfiguration;
 pub use models::error::CaptureError;
 pub use models::recording_result::{RecordingMetadata, RecordingResult};
