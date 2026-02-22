@@ -1,9 +1,5 @@
 name: CodeQL
 
-# NOTE: CodeQL requires GitHub Advanced Security, which is free on public repos.
-# This workflow will auto-activate when the repo becomes public.
-# Until then, it will fail gracefully at the Initialize step.
-
 on:
   push:
     branches: [main]
@@ -20,8 +16,6 @@ jobs:
   analyze:
     name: CodeQL (${{ matrix.language }})
     runs-on: ${{ matrix.runner }}
-    # Skip on private repos where GHAS isn't enabled
-    if: github.event.repository.visibility == 'public'
     strategy:
       fail-fast: false
       matrix:

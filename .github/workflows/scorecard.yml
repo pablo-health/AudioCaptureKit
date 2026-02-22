@@ -13,8 +13,6 @@ jobs:
   scorecard:
     name: Scorecard Analysis
     runs-on: ubuntu-latest
-    # Scorecard requires GHAS for SARIF upload — free on public repos
-    if: github.event.repository.visibility == 'public'
     permissions:
       contents: read
       security-events: write
