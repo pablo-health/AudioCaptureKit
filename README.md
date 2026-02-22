@@ -128,4 +128,6 @@ npm run tauri build    # Produces .exe + MSI installer in src-tauri/target/relea
 
 ## License
 
-MIT
+This project is licensed under the [GNU Affero General Public License v3.0](LICENSE).
+
+For commercial licensing, contact [kurtn@lll-solutions.com](mailto:kurtn@lll-solutions.com).
