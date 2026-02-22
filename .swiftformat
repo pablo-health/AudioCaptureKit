@@ -1,0 +1,64 @@
+# SwiftFormat Configuration — TherapyRecorder
+
+# Indentation
+--indent 4
+--indentcase false
+--smarttabs disabled
+
+# Wrapping
+--wraparguments before-first
+--wrapparameters before-first
+--wrapcollections before-first
+--wrapconditions after-first
+--wrapreturntype preserve
+--maxwidth 120
+--closingparen balanced
+
+# Braces (K&R style)
+--allman false
+
+# Imports
+--importgrouping alphabetized
+
+# Types
+--self remove
+--selfrequired
+--redundanttype inferred
+
+# Void
+--voidtype void
+
+# Semicolons
+--semicolons never
+
+# Trailing commas
+--commas always
+
+# Blank lines
+--trimwhitespace always
+--emptybraces no-space
+
+# Header
+--header strip
+
+# Explicit self
+--explicitself remove
+
+# Ranges
+--ranges spaced
+
+# Ifdef
+--ifdef no-indent
+
+# Mark extensions
+--extensionacl on-declarations
+
+# Disable rules that conflict with SwiftUI / project preferences
+--disable blankLinesAtStartOfScope
+--disable blankLinesAtEndOfScope
+
+# File header (strip auto-generated headers)
+--header strip
+
+# Swift version
+--swiftversion 6.0
