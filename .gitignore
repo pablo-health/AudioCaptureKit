@@ -29,6 +29,10 @@ DerivedData/
 # Rust
 windows/target/
 **/src-tauri/target/
+# Sample app lockfile — example app, not a production binary.
+# Omitted to avoid false-positive vulnerability alerts from transitive
+# Linux-only deps (e.g. glib) that are never compiled on Windows.
+Examples/windows/SampleApp/src-tauri/Cargo.lock
 
 # Node / Tauri frontend
 node_modules/
