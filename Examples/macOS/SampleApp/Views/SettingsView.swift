@@ -32,9 +32,9 @@ struct SettingsView: View {
                     Spacer()
 
                     Button("Open Settings") {
-                        NSWorkspace.shared.open(
-                            URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!
-                        )
+                        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
+                            NSWorkspace.shared.open(url)
+                        }
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.small)

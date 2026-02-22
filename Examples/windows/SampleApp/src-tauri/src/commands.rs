@@ -202,7 +202,14 @@ pub fn get_recordings() -> Result<Vec<RecordingInfo>, String> {
 
 #[tauri::command]
 pub fn delete_recording(path: String) -> Result<(), String> {
-    fs::remove_file(&path).map_err(|e| e.to_string())?;
+    let target = fs::canonicalize(&path).map_err(|e| e.to_string())?;
+    let allowed_dir = fs::canonicalize(recordings_dir()).map_err(|e| e.to_string())?;
+
+    if !target.starts_with(&allowed_dir) {
+        return Err("Path is outside the recordings directory".into());
+    }
+
+    fs::remove_file(&target).map_err(|e| e.to_string())?;
 
     // Also delete metadata sidecar if it exists
     let meta_path = format!("{}.metadata.json", path);

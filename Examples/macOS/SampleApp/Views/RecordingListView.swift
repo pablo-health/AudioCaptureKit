@@ -1,12 +1,9 @@
 import SwiftUI
 
-/// Displays a list of past recordings with metadata and upload controls.
+/// Displays a list of past recordings with metadata and playback controls.
 struct RecordingListView: View {
     let recordings: [LocalRecording]
-    let uploadProgress: [UUID: Double]
-    let uploadingIDs: Set<UUID>
     let playingRecordingID: UUID?
-    let onUpload: (LocalRecording) -> Void
     let onPlay: (LocalRecording) -> Void
     let onStopPlayback: () -> Void
 
@@ -22,10 +19,7 @@ struct RecordingListView: View {
                 List(recordings) { recording in
                     RecordingRow(
                         recording: recording,
-                        uploadProgress: uploadProgress[recording.id],
-                        isUploading: uploadingIDs.contains(recording.id),
                         isPlaying: playingRecordingID == recording.id,
-                        onUpload: { onUpload(recording) },
                         onPlay: { onPlay(recording) },
                         onStopPlayback: onStopPlayback
                     )
@@ -37,10 +31,7 @@ struct RecordingListView: View {
 
 struct RecordingRow: View {
     let recording: LocalRecording
-    let uploadProgress: Double?
-    let isUploading: Bool
     let isPlaying: Bool
-    let onUpload: () -> Void
     let onPlay: () -> Void
     let onStopPlayback: () -> Void
 
@@ -71,24 +62,6 @@ struct RecordingRow: View {
             }
 
             Spacer()
-
-            if recording.isUploaded {
-                Label("Uploaded", systemImage: "checkmark.circle.fill")
-                    .foregroundStyle(.green)
-                    .font(.caption)
-            } else if isUploading {
-                VStack(spacing: 2) {
-                    ProgressView(value: uploadProgress ?? 0)
-                        .frame(width: 80)
-                    Text("\(Int((uploadProgress ?? 0) * 100))%")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-            } else {
-                Button("Upload", action: onUpload)
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-            }
         }
         .padding(.vertical, 4)
     }
