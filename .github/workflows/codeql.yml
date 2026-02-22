@@ -23,7 +23,7 @@ jobs:
     # Skip on private repos where GHAS isn't enabled
     if: github.event.repository.visibility == 'public'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v4
