@@ -1,0 +1,32 @@
+[advisories]
+yanked = "warn"
+unmaintained = "workspace"
+
+[licenses]
+# All licenses are denied unless explicitly allowed (cargo-deny v2 default).
+# Dependencies must use permissive licenses. AGPL is only allowed for our own crates via exceptions.
+confidence-threshold = 0.8
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-3.0",
+    "Unicode-DFS-2016",
+    "Zlib",
+]
+exceptions = [
+    { allow = ["AGPL-3.0"], crate = "audio-capture-core" },
+    { allow = ["AGPL-3.0"], crate = "audio-capture-windows" },
+]
+
+[bans]
+multiple-versions = "warn"
+wildcards = "allow"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

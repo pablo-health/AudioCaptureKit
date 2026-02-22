@@ -1,0 +1,34 @@
+name: Rust Security
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "windows/**"
+  pull_request:
+    branches: [main]
+    paths:
+      - "windows/**"
+  schedule:
+    - cron: "0 7 * * 2" # Tuesday 7AM UTC
+  workflow_dispatch:
+
+jobs:
+  cargo-audit:
+    name: cargo audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          working-directory: windows
+
+  cargo-deny:
+    name: cargo deny
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          manifest-path: windows/Cargo.toml
