@@ -9,15 +9,18 @@ on:
     - cron: "0 6 * * 1" # Monday 6AM UTC
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   trivy-dependency-scan:
     name: Trivy Dependency Scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Run Trivy (vulnerabilities)
-        uses: aquasecurity/trivy-action@0.34.1
+        uses: aquasecurity/trivy-action@e368e328979b113139d6f9068e03accaed98a518 # 0.34.1
         with:
           scan-type: fs
           scan-ref: .
@@ -30,10 +33,10 @@ jobs:
     name: Trivy Config & Secret Scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Run Trivy (misconfig + secrets)
-        uses: aquasecurity/trivy-action@0.34.1
+        uses: aquasecurity/trivy-action@e368e328979b113139d6f9068e03accaed98a518 # 0.34.1
         with:
           scan-type: fs
           scan-ref: .

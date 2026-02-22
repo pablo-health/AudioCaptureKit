@@ -240,8 +240,7 @@ final class RecordingViewModel {
                 duration: result.duration,
                 createdAt: Date(),
                 isEncrypted: result.metadata.isEncrypted,
-                checksum: result.checksum,
-                isUploaded: false
+                checksum: result.checksum
             )
             recordings.insert(recording, at: 0)
             recordingState = .idle
@@ -302,8 +301,7 @@ final class RecordingViewModel {
                 duration: durationSecs,
                 createdAt: Date(),
                 isEncrypted: false,
-                checksum: "test-tone",
-                isUploaded: false
+                checksum: "test-tone"
             )
             recordings.insert(recording, at: 0)
             logger.info("Test tone generated: \(fileName)")

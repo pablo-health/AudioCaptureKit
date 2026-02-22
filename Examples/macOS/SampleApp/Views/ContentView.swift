@@ -3,7 +3,6 @@ import SwiftUI
 /// Main view combining recording controls, recording list, and settings.
 struct ContentView: View {
     @State private var recordingVM = RecordingViewModel()
-    @State private var uploadVM = UploadViewModel()
     @State private var selectedTab = 0
 
     var body: some View {
@@ -30,20 +29,7 @@ struct ContentView: View {
 
                 RecordingListView(
                     recordings: recordingVM.recordings,
-                    uploadProgress: uploadVM.uploadProgress,
-                    uploadingIDs: uploadVM.uploadingRecordingIDs,
                     playingRecordingID: recordingVM.playingRecordingID,
-                    onUpload: { recording in
-                        Task {
-                            await uploadVM.uploadRecording(recording) { uploadedID in
-                                if let index = recordingVM.recordings.firstIndex(
-                                    where: { $0.id == uploadedID })
-                                {
-                                    recordingVM.recordings[index].isUploaded = true
-                                }
-                            }
-                        }
-                    },
                     onPlay: { recording in
                         recordingVM.playRecording(recording)
                     },
@@ -86,15 +72,6 @@ struct ContentView: View {
             "Recording Error",
             isPresented: $recordingVM.showError,
             presenting: recordingVM.errorMessage
-        ) { _ in
-            Button("OK") {}
-        } message: { message in
-            Text(message)
-        }
-        .alert(
-            "Upload Error",
-            isPresented: $uploadVM.showError,
-            presenting: uploadVM.errorMessage
         ) { _ in
             Button("OK") {}
         } message: { message in

@@ -1,6 +1,6 @@
 import Foundation
 
-/// A locally stored recording with metadata for display and upload tracking.
+/// A locally stored recording with metadata for display.
 struct LocalRecording: Identifiable, Sendable {
     let id: UUID
     let fileURL: URL
@@ -8,7 +8,6 @@ struct LocalRecording: Identifiable, Sendable {
     let createdAt: Date
     let isEncrypted: Bool
     let checksum: String
-    var isUploaded: Bool
 
     var formattedDuration: String {
         let minutes = Int(duration) / 60
