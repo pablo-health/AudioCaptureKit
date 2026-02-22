@@ -5,10 +5,12 @@ on:
     branches: [main]
     paths:
       - "windows/**"
+      - "Examples/windows/SampleApp/src-tauri/**"
   pull_request:
     branches: [main]
     paths:
       - "windows/**"
+      - "Examples/windows/SampleApp/src-tauri/**"
   schedule:
     - cron: "0 7 * * 2" # Tuesday 7AM UTC
   workflow_dispatch:
@@ -18,7 +20,7 @@ jobs:
     name: cargo audit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: rustsec/audit-check@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -28,7 +30,7 @@ jobs:
     name: cargo deny
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: EmbarkStudios/cargo-deny-action@v2
         with:
           manifest-path: windows/Cargo.toml
