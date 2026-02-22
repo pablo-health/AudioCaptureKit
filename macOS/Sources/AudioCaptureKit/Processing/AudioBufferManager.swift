@@ -24,7 +24,7 @@ public actor AudioBufferManager {
     /// - Parameter capacity: Maximum number of float samples the buffer can hold.
     public init(capacity: Int) {
         self.capacity = capacity
-        buffer = [Float](repeating: 0, count: capacity)
+        self.buffer = [Float](repeating: 0, count: capacity)
     }
 
     /// Writes audio samples into the ring buffer.
@@ -34,7 +34,6 @@ public actor AudioBufferManager {
     public func write(_ samples: [Float]) {
         let count = samples.count
         if count > capacity {
-            // swiftformat:disable:next redundantSelf
             logger.warning("Write size \(count) exceeds buffer capacity \(self.capacity), truncating")
             let truncated = Array(samples.suffix(capacity))
             writeInternal(truncated)

@@ -57,10 +57,10 @@ public final class CompositeCaptureSession: @unchecked Sendable {
     /// Creates a new composite capture session.
     /// - Parameter configuration: Initial configuration. Can be updated via ``configure(_:)``.
     public init(configuration: CaptureConfiguration) {
-        sessionState = UnfairLock(SessionState(configuration: configuration))
-        micCapture = AVFoundationMicCapture(deviceID: configuration.micDeviceID)
-        systemCapture = CoreAudioTapCapture()
-        stereoMixer = StereoMixer(targetSampleRate: configuration.sampleRate)
+        self.sessionState = UnfairLock(SessionState(configuration: configuration))
+        self.micCapture = AVFoundationMicCapture(deviceID: configuration.micDeviceID)
+        self.systemCapture = CoreAudioTapCapture()
+        self.stereoMixer = StereoMixer(targetSampleRate: configuration.sampleRate)
     }
 
     func setState(_ newState: CaptureState) {

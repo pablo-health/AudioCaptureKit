@@ -21,7 +21,6 @@
 --importgrouping alphabetized
 
 # Types
---self remove
 --selfrequired
 --redundanttype inferred
 
@@ -53,6 +52,7 @@
 # Disable rules that conflict with SwiftUI / project preferences
 --disable blankLinesAtStartOfScope
 --disable blankLinesAtEndOfScope
+--disable redundantSelf
 
 # Swift version
 --swiftversion 6.0

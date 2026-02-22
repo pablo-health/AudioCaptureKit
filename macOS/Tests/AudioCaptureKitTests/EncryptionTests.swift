@@ -9,7 +9,7 @@ struct AES256GCMEncryptor: CaptureEncryptor {
     let keyId: String
 
     init(keyId: String = "test-key-001") {
-        key = SymmetricKey(size: .bits256)
+        self.key = SymmetricKey(size: .bits256)
         self.keyId = keyId
     }
 
