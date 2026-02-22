@@ -1,5 +1,8 @@
 # AudioCaptureKit
 
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/pablo-health/AudioCaptureKit/badge)](https://scorecard.dev/viewer/?uri=github.com/pablo-health/AudioCaptureKit)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/12007/badge)](https://www.bestpractices.dev/projects/12007)
+
 Cross-platform audio capture library — microphone + system audio mixed into a single stereo recording with AES-256-GCM encryption.
 
 ## Platform Support
