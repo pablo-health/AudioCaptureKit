@@ -1,0 +1,21 @@
+[package]
+name = "audio-capture-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Platform-agnostic audio capture core: mixing, buffering, encryption, WAV I/O"
+
+[dependencies]
+parking_lot = { workspace = true }
+aes-gcm = { workspace = true }
+sha2 = { workspace = true }
+log = { workspace = true }
+thiserror = { workspace = true }
+uuid = { version = "1", features = ["v4"] }
+chrono = { version = "0.4", features = ["serde"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[dev-dependencies]
+approx = "0.5"

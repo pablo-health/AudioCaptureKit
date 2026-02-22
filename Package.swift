@@ -21,14 +21,16 @@ let package = Package(
             name: "AudioCaptureKit",
             dependencies: [
                 .product(name: "Crypto", package: "swift-crypto")
-            ]
+            ],
+            path: "macOS/Sources/AudioCaptureKit"
         ),
         .testTarget(
             name: "AudioCaptureKitTests",
             dependencies: [
                 "AudioCaptureKit",
                 .product(name: "Testing", package: "swift-testing")
-            ]
+            ],
+            path: "macOS/Tests/AudioCaptureKitTests"
         )
     ]
 )

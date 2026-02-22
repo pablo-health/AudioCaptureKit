@@ -26,6 +26,18 @@ DerivedData/
 .Spotlight-V100
 .Trashes
 
+# Rust
+windows/target/
+**/src-tauri/target/
+
+# Node / Tauri frontend
+node_modules/
+dist/
+package-lock.json
+
+# Claude Code
+.claude/
+
 # IDE
 .vscode/
 .idea/
