@@ -142,9 +142,9 @@ public final class AVFoundationMicCapture: NSObject, AudioCaptureProvider, @unch
 
 extension AVFoundationMicCapture: AVCaptureAudioDataOutputSampleBufferDelegate {
     public func captureOutput(
-        _ output: AVCaptureOutput,
+        _: AVCaptureOutput,
         didOutput sampleBuffer: CMSampleBuffer,
-        from connection: AVCaptureConnection
+        from _: AVCaptureConnection
     ) {
         guard let formatDescription = CMSampleBufferGetFormatDescription(sampleBuffer) else { return }
         let asbd = CMAudioFormatDescriptionGetStreamBasicDescription(formatDescription)
@@ -190,8 +190,8 @@ extension CMSampleBuffer {
 
         guard let blockBuffer = CMSampleBufferGetDataBuffer(self) else { return nil }
 
-        var lengthAtOffset: Int = 0
-        var totalLength: Int = 0
+        var lengthAtOffset = 0
+        var totalLength = 0
         var dataPointer: UnsafeMutablePointer<Int8>?
 
         let status = CMBlockBufferGetDataPointer(
@@ -210,8 +210,8 @@ extension CMSampleBuffer {
                 frameCount,
                 totalLength / MemoryLayout<Float>.size / Int(channelCount)
             )
-            for frame in 0..<sampleCount {
-                for channel in 0..<Int(channelCount) {
+            for frame in 0 ..< sampleCount {
+                for channel in 0 ..< Int(channelCount) {
                     channelData[channel][frame] = floatData[frame * Int(channelCount) + channel]
                 }
             }

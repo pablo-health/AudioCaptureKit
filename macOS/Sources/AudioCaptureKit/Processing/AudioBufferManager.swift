@@ -10,9 +10,9 @@ import os
 /// dropping the oldest samples.
 public actor AudioBufferManager {
     private var buffer: [Float]
-    private var writeIndex: Int = 0
-    private var readIndex: Int = 0
-    private var availableSamples: Int = 0
+    private var writeIndex = 0
+    private var readIndex = 0
+    private var availableSamples = 0
     private let capacity: Int
 
     private let logger = Logger(
@@ -24,7 +24,7 @@ public actor AudioBufferManager {
     /// - Parameter capacity: Maximum number of float samples the buffer can hold.
     public init(capacity: Int) {
         self.capacity = capacity
-        self.buffer = [Float](repeating: 0, count: capacity)
+        buffer = [Float](repeating: 0, count: capacity)
     }
 
     /// Writes audio samples into the ring buffer.
@@ -34,6 +34,7 @@ public actor AudioBufferManager {
     public func write(_ samples: [Float]) {
         let count = samples.count
         if count > capacity {
+            // swiftformat:disable:next redundantSelf
             logger.warning("Write size \(count) exceeds buffer capacity \(self.capacity), truncating")
             let truncated = Array(samples.suffix(capacity))
             writeInternal(truncated)
@@ -66,7 +67,7 @@ public actor AudioBufferManager {
         guard samplesToRead > 0 else { return [] }
 
         var result = [Float](repeating: 0, count: samplesToRead)
-        for i in 0..<samplesToRead {
+        for i in 0 ..< samplesToRead {
             result[i] = buffer[(readIndex + i) % capacity]
         }
         readIndex = (readIndex + samplesToRead) % capacity

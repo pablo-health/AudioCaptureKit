@@ -62,6 +62,7 @@ public actor EncryptedFileWriter {
         totalBytesWritten = UInt64(header.count)
         isOpen = true
 
+        // swiftformat:disable:next redundantSelf
         logger.info("Opened file for writing: \(self.fileURL.lastPathComponent)")
     }
 
@@ -152,6 +153,7 @@ public actor EncryptedFileWriter {
         let digest = SHA256.hash(data: fileData)
         let checksum = digest.map { String(format: "%02x", $0) }.joined()
 
+        // swiftformat:disable:next redundantSelf
         logger.info("Closed file: \(self.fileURL.lastPathComponent), size: \(self.totalBytesWritten) bytes")
         return checksum
     }

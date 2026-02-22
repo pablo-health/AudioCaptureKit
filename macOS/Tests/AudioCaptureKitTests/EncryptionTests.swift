@@ -1,7 +1,7 @@
+@testable import AudioCaptureKit
 import Crypto
 import Foundation
 import Testing
-@testable import AudioCaptureKit
 
 /// A concrete AES-256-GCM encryptor for testing.
 struct AES256GCMEncryptor: CaptureEncryptor {
@@ -9,7 +9,7 @@ struct AES256GCMEncryptor: CaptureEncryptor {
     let keyId: String
 
     init(keyId: String = "test-key-001") {
-        self.key = SymmetricKey(size: .bits256)
+        key = SymmetricKey(size: .bits256)
         self.keyId = keyId
     }
 
@@ -32,7 +32,7 @@ struct AES256GCMEncryptor: CaptureEncryptor {
         [
             "keyId": keyId,
             "algorithm": algorithm,
-            "createdAt": ISO8601DateFormatter().string(from: Date())
+            "createdAt": ISO8601DateFormatter().string(from: Date()),
         ]
     }
 }

@@ -27,10 +27,7 @@ public final class CoreAudioTapCapture: AudioCaptureProvider, @unchecked Sendabl
     private let state = UnfairLock(State())
     private let ioQueue = DispatchQueue(label: "com.audiocapturekit.system-audio-io", qos: .userInitiated)
 
-    private let logger = Logger(
-        subsystem: "com.audiocapturekit",
-        category: "CoreAudioTapCapture"
-    )
+    private let logger = Logger(subsystem: "com.audiocapturekit", category: "CoreAudioTapCapture")
 
     public init() {}
 
@@ -323,10 +320,12 @@ public final class CoreAudioTapCapture: AudioCaptureProvider, @unchecked Sendabl
         callback(pcmBuffer, audioTime)
     }
 
-    // MARK: - Helpers
+}
 
-    /// Queries the nominal sample rate from a Core Audio device.
-    private static func queryDeviceSampleRate(_ deviceID: AudioObjectID) -> Double {
+// MARK: - Core Audio Helpers
+
+extension CoreAudioTapCapture {
+    static func queryDeviceSampleRate(_ deviceID: AudioObjectID) -> Double {
         var sampleRate: Float64 = 0
         var size = UInt32(MemoryLayout<Float64>.size)
         var address = AudioObjectPropertyAddress(
@@ -339,8 +338,7 @@ public final class CoreAudioTapCapture: AudioCaptureProvider, @unchecked Sendabl
         return sampleRate
     }
 
-    /// Reads the input stream format of a Core Audio device (e.g. the aggregate device).
-    private static func readDeviceInputFormat(_ deviceID: AudioObjectID) -> AudioStreamBasicDescription? {
+    static func readDeviceInputFormat(_ deviceID: AudioObjectID) -> AudioStreamBasicDescription? {
         var format = AudioStreamBasicDescription()
         var size = UInt32(MemoryLayout<AudioStreamBasicDescription>.size)
         var address = AudioObjectPropertyAddress(
@@ -353,8 +351,7 @@ public final class CoreAudioTapCapture: AudioCaptureProvider, @unchecked Sendabl
         return format
     }
 
-    /// Reads the tap's audio stream format.
-    private static func readTapFormat(_ tapID: AudioObjectID) -> AudioStreamBasicDescription? {
+    static func readTapFormat(_ tapID: AudioObjectID) -> AudioStreamBasicDescription? {
         var format = AudioStreamBasicDescription()
         var size = UInt32(MemoryLayout<AudioStreamBasicDescription>.size)
         var address = AudioObjectPropertyAddress(
@@ -367,8 +364,7 @@ public final class CoreAudioTapCapture: AudioCaptureProvider, @unchecked Sendabl
         return format
     }
 
-    /// Returns the UID string of the default system output device.
-    private static func defaultOutputDeviceUID() throws -> String {
+    static func defaultOutputDeviceUID() throws -> String {
         var deviceID: AudioDeviceID = 0
         var size = UInt32(MemoryLayout<AudioDeviceID>.size)
         var address = AudioObjectPropertyAddress(

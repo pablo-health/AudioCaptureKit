@@ -11,14 +11,13 @@ extension CompositeCaptureSession {
                 try? await Task.sleep(nanoseconds: 250_000_000)
                 guard let self, !Task.isCancelled else { break }
 
-                let currentState = self.sessionState.withLock { $0.state }
+                let currentState = sessionState.withLock { $0.state }
                 if case .capturing = currentState {
-                    let duration = self.elapsedDuration()
-                    self.setState(.capturing(duration: duration))
+                    let duration = elapsedDuration()
+                    setState(.capturing(duration: duration))
 
-                    if let maxDuration = self.configuration.maxDuration,
-                       duration >= maxDuration {
-                        _ = try? await self.stopCapture()
+                    if let maxDuration = configuration.maxDuration, duration >= maxDuration {
+                        _ = try? await stopCapture()
                         break
                     }
                 }
@@ -32,9 +31,9 @@ extension CompositeCaptureSession {
                 try? await Task.sleep(nanoseconds: 100_000_000)
                 guard let self, !Task.isCancelled else { break }
 
-                let currentState = self.sessionState.withLock { $0.state }
+                let currentState = sessionState.withLock { $0.state }
                 if case .capturing = currentState {
-                    await self.processBuffers()
+                    await processBuffers()
                 }
             }
         }
@@ -88,7 +87,7 @@ extension CompositeCaptureSession {
         let sampleRate = buffer.format.sampleRate
         let formatDesc =
             "\(Int(sampleRate))Hz \(buffer.format.channelCount)ch "
-            + "\(buffer.format.isInterleaved ? "int" : "non-int")"
+                + "\(buffer.format.isInterleaved ? "int" : "non-int")"
 
         guard let samples = AudioFormatConverter.extractMonoSamples(from: buffer) else {
             logger.warning("Mic: extractMonoSamples returned nil for \(formatDesc)")
@@ -111,52 +110,46 @@ extension CompositeCaptureSession {
         let targetRate = stereoMixer.targetSampleRate
         let formatDesc =
             "\(Int(reportedRate))Hz \(channelCount)ch "
-            + "\(buffer.format.isInterleaved ? "int" : "non-int")"
+                + "\(buffer.format.isInterleaved ? "int" : "non-int")"
 
         guard let samples = AudioFormatConverter.extractFloatSamples(from: buffer) else {
-            logger.warning(
-                "System: extractFloatSamples returned nil for \(formatDesc)"
-            )
+            logger.warning("System: extractFloatSamples returned nil for \(formatDesc)")
             return
         }
 
-        let sysCount = sessionState.withLock {
-            $0.diagnostics.systemCallbackCount
-        }
-        let frameCount = buffer.frameLength
-        let sampleCount = samples.count
+        let sysCount = sessionState.withLock { $0.diagnostics.systemCallbackCount }
         if sysCount == 0 {
-            logger.info("System audio: \(reportedRate)Hz, target=\(targetRate)Hz, \(frameCount)fr, \(channelCount)ch")
-            logger.info("System audio detail: \(sampleCount) samples")
+            logFirstSystemCallback(buffer: buffer, samples: samples, targetRate: targetRate)
         }
 
-        let effectiveSourceRate = targetRate
-        let resampled: [Float]
-        if channelCount >= 2 {
-            resampled = stereoMixer.resampleStereo(
-                samples, from: effectiveSourceRate
-            )
-        } else {
-            let mono = stereoMixer.resample(samples, from: effectiveSourceRate)
-            resampled = stereoMixer.interleave(left: mono, right: mono)
-        }
+        let resampled = resampleSystemAudio(samples, channelCount: channelCount, sourceRate: targetRate)
 
         if sysCount == 0 {
-            let inCount = samples.count
-            let outCount = resampled.count
-            logger.info(
-                "System audio after resample: in=\(inCount) out=\(outCount) (effective source=\(effectiveSourceRate)Hz)"
-            )
+            logger.info("System audio after resample: in=\(samples.count) out=\(resampled.count)")
         }
 
         updateSystemLevel(samples: resampled)
         sessionState.withLock {
             $0.diagnostics.systemCallbackCount += 1
             $0.diagnostics.systemSamplesTotal += resampled.count
-            $0.diagnostics.systemFormat =
-                "\(Int(reportedRate))->\(Int(targetRate))Hz \(channelCount)ch"
+            $0.diagnostics.systemFormat = "\(Int(reportedRate))->\(Int(targetRate))Hz \(channelCount)ch"
         }
         Task { await systemBuffer?.write(resampled) }
+    }
+
+    private func logFirstSystemCallback(buffer: AVAudioPCMBuffer, samples: [Float], targetRate: Double) {
+        let rate = buffer.format.sampleRate
+        let ch = Int(buffer.format.channelCount)
+        logger.info("System audio: \(rate)Hz, target=\(targetRate)Hz, \(buffer.frameLength)fr, \(ch)ch")
+        logger.info("System audio detail: \(samples.count) samples")
+    }
+
+    private func resampleSystemAudio(_ samples: [Float], channelCount: Int, sourceRate: Double) -> [Float] {
+        if channelCount >= 2 {
+            return stereoMixer.resampleStereo(samples, from: sourceRate)
+        }
+        let mono = stereoMixer.resample(samples, from: sourceRate)
+        return stereoMixer.interleave(left: mono, right: mono)
     }
 
     // MARK: - Level Metering
@@ -235,6 +228,15 @@ extension CompositeCaptureSession {
             throw error
         }
 
+        let result = buildRecordingResult(checksum: checksum)
+        setState(.completed(result))
+
+        let delegate = sessionState.withLock { $0.delegate }
+        delegate?.captureSession(self, didFinishCapture: result)
+        return result
+    }
+
+    private func buildRecordingResult(checksum: String) -> RecordingResult {
         let duration = elapsedDuration()
         let config = configuration
         let fileURL: URL = sessionState.withLock { $0.fileURL! }
@@ -252,18 +254,6 @@ extension CompositeCaptureSession {
             encryptionKeyId: config.encryptor?.keyMetadata()["keyId"]
         )
 
-        let result = RecordingResult(
-            fileURL: fileURL,
-            duration: duration,
-            metadata: metadata,
-            checksum: checksum
-        )
-
-        setState(.completed(result))
-
-        let delegate = sessionState.withLock { $0.delegate }
-        delegate?.captureSession(self, didFinishCapture: result)
-
-        return result
+        return RecordingResult(fileURL: fileURL, duration: duration, metadata: metadata, checksum: checksum)
     }
 }

@@ -34,17 +34,17 @@ extension CaptureState: Equatable {
              (.configuring, .configuring),
              (.ready, .ready),
              (.stopping, .stopping):
-            return true
-        case (.capturing(let a), .capturing(let b)):
-            return a == b
-        case (.paused(let a), .paused(let b)):
-            return a == b
-        case (.completed(let a), .completed(let b)):
-            return a == b
-        case (.failed(let a), .failed(let b)):
-            return a == b
+            true
+        case let (.capturing(lhsDuration), .capturing(rhsDuration)):
+            lhsDuration == rhsDuration
+        case let (.paused(lhsDuration), .paused(rhsDuration)):
+            lhsDuration == rhsDuration
+        case let (.completed(lhsResult), .completed(rhsResult)):
+            lhsResult == rhsResult
+        case let (.failed(lhsError), .failed(rhsError)):
+            lhsError == rhsError
         default:
-            return false
+            false
         }
     }
 }

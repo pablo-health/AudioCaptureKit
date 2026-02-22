@@ -31,21 +31,21 @@ extension CaptureError: LocalizedError {
     public var errorDescription: String? {
         switch self {
         case .permissionDenied:
-            return "Permission denied. Please grant the required audio recording permission."
+            "Permission denied. Please grant the required audio recording permission."
         case .deviceNotAvailable:
-            return "The requested audio device is not available."
-        case .configurationFailed(let reason):
-            return "Configuration failed: \(reason)"
-        case .encodingFailed(let reason):
-            return "Encoding failed: \(reason)"
-        case .encryptionFailed(let reason):
-            return "Encryption failed: \(reason)"
-        case .storageError(let reason):
-            return "Storage error: \(reason)"
+            "The requested audio device is not available."
+        case let .configurationFailed(reason):
+            "Configuration failed: \(reason)"
+        case let .encodingFailed(reason):
+            "Encoding failed: \(reason)"
+        case let .encryptionFailed(reason):
+            "Encryption failed: \(reason)"
+        case let .storageError(reason):
+            "Storage error: \(reason)"
         case .timeout:
-            return "The operation timed out."
-        case .unknown(let reason):
-            return "Unknown error: \(reason)"
+            "The operation timed out."
+        case let .unknown(reason):
+            "Unknown error: \(reason)"
         }
     }
 }

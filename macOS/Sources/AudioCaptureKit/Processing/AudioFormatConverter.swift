@@ -39,23 +39,23 @@ public struct AudioFormatConverter: Sendable {
         let chunkSize = 36 + dataSize
 
         // RIFF chunk descriptor
-        header.append(contentsOf: [0x52, 0x49, 0x46, 0x46])  // "RIFF"
-        appendUInt32(&header, chunkSize)                        // Chunk size
-        header.append(contentsOf: [0x57, 0x41, 0x56, 0x45])  // "WAVE"
+        header.append(contentsOf: [0x52, 0x49, 0x46, 0x46]) // "RIFF"
+        appendUInt32(&header, chunkSize) // Chunk size
+        header.append(contentsOf: [0x57, 0x41, 0x56, 0x45]) // "WAVE"
 
         // "fmt " sub-chunk
-        header.append(contentsOf: [0x66, 0x6D, 0x74, 0x20])  // "fmt "
-        appendUInt32(&header, 16)                               // Sub-chunk size (PCM)
-        appendUInt16(&header, 1)                                // Audio format (1 = PCM)
-        appendUInt16(&header, channels)                         // Number of channels
-        appendUInt32(&header, sampleRate)                       // Sample rate
-        appendUInt32(&header, byteRate)                         // Byte rate
-        appendUInt16(&header, blockAlign)                       // Block align
-        appendUInt16(&header, bitDepth)                         // Bits per sample
+        header.append(contentsOf: [0x66, 0x6D, 0x74, 0x20]) // "fmt "
+        appendUInt32(&header, 16) // Sub-chunk size (PCM)
+        appendUInt16(&header, 1) // Audio format (1 = PCM)
+        appendUInt16(&header, channels) // Number of channels
+        appendUInt32(&header, sampleRate) // Sample rate
+        appendUInt32(&header, byteRate) // Byte rate
+        appendUInt16(&header, blockAlign) // Block align
+        appendUInt16(&header, bitDepth) // Bits per sample
 
         // "data" sub-chunk
-        header.append(contentsOf: [0x64, 0x61, 0x74, 0x61])  // "data"
-        appendUInt32(&header, dataSize)                         // Data size
+        header.append(contentsOf: [0x64, 0x61, 0x74, 0x61]) // "data"
+        appendUInt32(&header, dataSize) // Data size
 
         return header
     }
@@ -90,8 +90,8 @@ public struct AudioFormatConverter: Sendable {
 
         // For non-interleaved multi-channel, interleave the channels
         var samples = [Float](repeating: 0, count: frameCount * channelCount)
-        for frame in 0..<frameCount {
-            for channel in 0..<channelCount {
+        for frame in 0 ..< frameCount {
+            for channel in 0 ..< channelCount {
                 samples[frame * channelCount + channel] = channelData[channel][frame]
             }
         }
@@ -118,9 +118,9 @@ public struct AudioFormatConverter: Sendable {
         guard let interleaved = extractFloatSamples(from: buffer) else { return nil }
         var mono = [Float](repeating: 0, count: frameCount)
         let scale = 1.0 / Float(channelCount)
-        for frame in 0..<frameCount {
+        for frame in 0 ..< frameCount {
             var sum: Float = 0
-            for ch in 0..<channelCount {
+            for ch in 0 ..< channelCount {
                 sum += interleaved[frame * channelCount + ch]
             }
             mono[frame] = sum * scale
@@ -131,12 +131,12 @@ public struct AudioFormatConverter: Sendable {
     // MARK: - Private Helpers
 
     private static func appendUInt32(_ data: inout Data, _ value: UInt32) {
-        var v = value.littleEndian
-        withUnsafeBytes(of: &v) { data.append(contentsOf: $0) }
+        var le = value.littleEndian
+        withUnsafeBytes(of: &le) { data.append(contentsOf: $0) }
     }
 
     private static func appendUInt16(_ data: inout Data, _ value: UInt16) {
-        var v = value.littleEndian
-        withUnsafeBytes(of: &v) { data.append(contentsOf: $0) }
+        var le = value.littleEndian
+        withUnsafeBytes(of: &le) { data.append(contentsOf: $0) }
     }
 }

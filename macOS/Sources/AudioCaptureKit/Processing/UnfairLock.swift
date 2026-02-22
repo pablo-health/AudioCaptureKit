@@ -11,7 +11,7 @@ package final class UnfairLock<Value: ~Copyable>: @unchecked Sendable {
 
     /// Creates a new lock protecting the given value.
     package init(_ value: consuming Value) {
-        self._value = value
+        _value = value
     }
 
     /// Executes a closure while holding the lock.

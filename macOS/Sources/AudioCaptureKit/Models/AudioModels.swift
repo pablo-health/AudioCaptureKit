@@ -65,7 +65,13 @@ public struct AudioSource: Sendable, Equatable, Identifiable {
     /// The transport type of this audio device (e.g. built-in, Bluetooth).
     public let transportType: AudioTransportType?
 
-    public init(id: String, name: String, type: AudioTrackType, isDefault: Bool, transportType: AudioTransportType? = nil) {
+    public init(
+        id: String,
+        name: String,
+        type: AudioTrackType,
+        isDefault: Bool,
+        transportType: AudioTransportType? = nil
+    ) {
         self.id = id
         self.name = name
         self.type = type
@@ -101,27 +107,27 @@ public struct AudioLevels: Sendable, Equatable {
     }
 
     /// Default zero levels.
-    public static let zero = AudioLevels()
+    public static let zero = Self()
 }
 
 /// Real-time diagnostics for debugging the capture pipeline.
 public struct CaptureSessionDiagnostics: Sendable {
     /// Number of mic audio callbacks received.
-    public var micCallbackCount: Int = 0
+    public var micCallbackCount = 0
     /// Number of system audio callbacks received.
-    public var systemCallbackCount: Int = 0
+    public var systemCallbackCount = 0
     /// Total mic samples written to buffer.
-    public var micSamplesTotal: Int = 0
+    public var micSamplesTotal = 0
     /// Total system samples written to buffer (interleaved stereo count).
-    public var systemSamplesTotal: Int = 0
+    public var systemSamplesTotal = 0
     /// Format description of last mic buffer received.
-    public var micFormat: String = "—"
+    public var micFormat = "—"
     /// Format description of last system buffer received.
-    public var systemFormat: String = "—"
+    public var systemFormat = "—"
     /// Total bytes written to file.
-    public var bytesWritten: Int = 0
+    public var bytesWritten = 0
     /// Number of processBuffers cycles that produced output.
-    public var mixCycles: Int = 0
+    public var mixCycles = 0
 
     public init() {}
 }

@@ -62,7 +62,7 @@ jobs:
           echo "$PWD" >> "$GITHUB_PATH"
 
       - name: SwiftLint
-        run: swiftlint lint --config macOS/.swiftlint.yml macOS/Sources/ macOS/Tests/
+        run: swiftlint lint --strict --config macOS/.swiftlint.yml macOS/Sources/ macOS/Tests/
 
       - name: SwiftFormat
         run: swiftformat --lint --config macOS/.swiftformat macOS/Sources/ macOS/Tests/

@@ -57,10 +57,10 @@ public final class CompositeCaptureSession: @unchecked Sendable {
     /// Creates a new composite capture session.
     /// - Parameter configuration: Initial configuration. Can be updated via ``configure(_:)``.
     public init(configuration: CaptureConfiguration) {
-        self.sessionState = UnfairLock(SessionState(configuration: configuration))
-        self.micCapture = AVFoundationMicCapture(deviceID: configuration.micDeviceID)
-        self.systemCapture = CoreAudioTapCapture()
-        self.stereoMixer = StereoMixer(targetSampleRate: configuration.sampleRate)
+        sessionState = UnfairLock(SessionState(configuration: configuration))
+        micCapture = AVFoundationMicCapture(deviceID: configuration.micDeviceID)
+        systemCapture = CoreAudioTapCapture()
+        stereoMixer = StereoMixer(targetSampleRate: configuration.sampleRate)
     }
 
     func setState(_ newState: CaptureState) {
@@ -85,11 +85,10 @@ public final class CompositeCaptureSession: @unchecked Sendable {
         sessionState.withLock { state in
             guard let startTime = state.captureStartTime else { return 0 }
             let totalElapsed = Date().timeIntervalSince(startTime)
-            let currentPauseDuration: TimeInterval
-            if let pauseTime = state.lastPauseTime {
-                currentPauseDuration = Date().timeIntervalSince(pauseTime)
+            let currentPauseDuration: TimeInterval = if let pauseTime = state.lastPauseTime {
+                Date().timeIntervalSince(pauseTime)
             } else {
-                currentPauseDuration = 0
+                0
             }
             return totalElapsed - state.pausedDuration - currentPauseDuration
         }
@@ -239,7 +238,7 @@ extension CompositeCaptureSession: AudioCaptureSession {
         let outputRate = min(actualMicRate, config.sampleRate)
         logger.info("Output rate: \(outputRate)Hz")
 
-        self.stereoMixer = StereoMixer(targetSampleRate: outputRate)
+        stereoMixer = StereoMixer(targetSampleRate: outputRate)
         sessionState.withLock { $0.detectedMicRate = actualMicRate }
 
         return outputRate
@@ -258,7 +257,7 @@ extension CompositeCaptureSession: AudioCaptureSession {
         let ext = config.encryptor != nil ? "enc.wav" : "wav"
         let fileURL = config.outputDirectory.appendingPathComponent("\(fileName).\(ext)")
         let writer = EncryptedFileWriter(fileURL: fileURL, encryptor: config.encryptor)
-        self.fileWriter = writer
+        fileWriter = writer
         sessionState.withLock { $0.fileURL = fileURL }
 
         let outputConfig = CaptureConfiguration(
@@ -319,8 +318,8 @@ extension CompositeCaptureSession: AudioCaptureSession {
                 self,
                 didEncounterError: .configurationFailed(
                     "System audio unavailable: \(error.localizedDescription). "
-                    + "Ensure this app is enabled in System Settings > "
-                    + "Privacy & Security > Screen & System Audio Recording."
+                        + "Ensure this app is enabled in System Settings > "
+                        + "Privacy & Security > Screen & System Audio Recording."
                 )
             )
         }
