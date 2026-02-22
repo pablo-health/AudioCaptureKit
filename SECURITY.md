@@ -50,5 +50,4 @@ This project handles sensitive audio data and follows these security practices:
 - **HIPAA-aware logging**: `print()` is forbidden in production code; all logging uses `os.log` / `Logger` with appropriate privacy levels.
 - **Dependency scanning**: Automated via [Trivy](https://github.com/aquasecurity/trivy), cargo audit, cargo deny, npm audit, and [Dependabot](https://github.com/pablo-health/AudioCaptureKit/security/dependabot).
 - **Static analysis**: SwiftLint (strict mode), Clippy (deny warnings), [CodeQL](https://github.com/pablo-health/AudioCaptureKit/security/code-scanning), and Trivy misconfiguration scanning.
-- **License compliance**: GPL/AGPL dependencies are denied via cargo-deny and GitHub dependency review.
 - **CI enforcement**: All security checks run on every PR and on a weekly schedule.
