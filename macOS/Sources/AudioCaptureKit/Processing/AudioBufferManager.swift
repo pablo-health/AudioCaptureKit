@@ -10,9 +10,9 @@ import os
 /// dropping the oldest samples.
 public actor AudioBufferManager {
     private var buffer: [Float]
-    private var writeIndex: Int = 0
-    private var readIndex: Int = 0
-    private var availableSamples: Int = 0
+    private var writeIndex = 0
+    private var readIndex = 0
+    private var availableSamples = 0
     private let capacity: Int
 
     private let logger = Logger(
@@ -66,7 +66,7 @@ public actor AudioBufferManager {
         guard samplesToRead > 0 else { return [] }
 
         var result = [Float](repeating: 0, count: samplesToRead)
-        for i in 0..<samplesToRead {
+        for i in 0 ..< samplesToRead {
             result[i] = buffer[(readIndex + i) % capacity]
         }
         readIndex = (readIndex + samplesToRead) % capacity

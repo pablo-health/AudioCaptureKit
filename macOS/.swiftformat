@@ -21,7 +21,6 @@
 --importgrouping alphabetized
 
 # Types
---self remove
 --selfrequired
 --redundanttype inferred
 
@@ -38,12 +37,6 @@
 --trimwhitespace always
 --emptybraces no-space
 
-# Header
---header strip
-
-# Explicit self
---explicitself remove
-
 # Ranges
 --ranges spaced
 
@@ -53,12 +46,13 @@
 # Mark extensions
 --extensionacl on-declarations
 
+# Header
+--header strip
+
 # Disable rules that conflict with SwiftUI / project preferences
 --disable blankLinesAtStartOfScope
 --disable blankLinesAtEndOfScope
-
-# File header (strip auto-generated headers)
---header strip
+--disable redundantSelf
 
 # Swift version
 --swiftversion 6.0

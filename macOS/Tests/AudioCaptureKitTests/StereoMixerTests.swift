@@ -1,6 +1,6 @@
+@testable import AudioCaptureKit
 import Foundation
 import Testing
-@testable import AudioCaptureKit
 
 @Suite("StereoMixer Tests")
 struct StereoMixerTests {

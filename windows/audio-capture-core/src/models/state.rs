@@ -17,7 +17,7 @@ pub enum CaptureState {
     Capturing { duration_secs: f64 },
     Paused { duration_secs: f64 },
     Stopping,
-    Completed(RecordingResult),
+    Completed(Box<RecordingResult>),
     Failed(CaptureError),
 }
 
@@ -41,9 +41,7 @@ impl CaptureState {
     /// Returns the current duration if in a state that tracks it.
     pub fn duration(&self) -> Option<f64> {
         match self {
-            Self::Capturing { duration_secs } | Self::Paused { duration_secs } => {
-                Some(*duration_secs)
-            }
+            Self::Capturing { duration_secs } | Self::Paused { duration_secs } => Some(*duration_secs),
             Self::Completed(result) => Some(result.duration_secs),
             _ => None,
         }

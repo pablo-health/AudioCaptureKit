@@ -1,7 +1,7 @@
 # Swift Package Manager
 .build/
 .swiftpm/
-Package.resolved
+# Package.resolved — tracked for reproducible CI builds
 
 # Xcode
 DerivedData/
@@ -33,7 +33,7 @@ windows/target/
 # Node / Tauri frontend
 node_modules/
 dist/
-package-lock.json
+# package-lock.json — tracked for reproducible CI builds
 
 # Claude Code
 .claude/

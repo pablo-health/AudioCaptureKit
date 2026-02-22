@@ -1,6 +1,6 @@
+@testable import AudioCaptureKit
 import Foundation
 import Testing
-@testable import AudioCaptureKit
 
 @Suite("RecordingMetadata Tests")
 struct RecordingMetadataTests {
@@ -17,7 +17,7 @@ struct RecordingMetadataTests {
             isEncrypted: true, createdAt: createdAt,
             tracks: [
                 AudioTrack(type: .mic, channel: .left),
-                AudioTrack(type: .system, channel: .right)
+                AudioTrack(type: .system, channel: .right),
             ],
             encryptionAlgorithm: "AES-256-GCM",
             encryptionKeyId: "key-001"
