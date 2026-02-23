@@ -13,22 +13,56 @@ permissions:
   security-events: write
 
 jobs:
-  analyze:
-    name: CodeQL (${{ matrix.language }})
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - language: javascript-typescript
-            runner: ubuntu-latest
-          - language: swift
-            runner: macos-15
+  changes:
+    name: Detect Swift changes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      # Always run on push/schedule; on PRs only run if Swift files changed
+      swift: ${{ github.event_name != 'pull_request' || steps.filter.outputs.swift == 'true' }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3
+        id: filter
+        if: github.event_name == 'pull_request'
+        with:
+          filters: |
+            swift:
+              - 'macOS/**'
+              - 'Package.swift'
+              - 'Package.resolved'
+
+  analyze-js:
+    name: CodeQL (javascript-typescript)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@89a39a4e59826350b863aa6b6252a07ad50cf83e # v4
+        with:
+          languages: javascript-typescript
+          queries: security-extended
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@89a39a4e59826350b863aa6b6252a07ad50cf83e # v4
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@89a39a4e59826350b863aa6b6252a07ad50cf83e # v4
+        with:
+          category: /language:javascript-typescript
+
+  analyze-swift:
+    name: CodeQL (swift)
+    needs: changes
+    if: needs.changes.outputs.swift == 'true'
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Cache SPM dependencies
-        if: matrix.language == 'swift'
         uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5
         with:
           path: |
@@ -40,13 +74,13 @@ jobs:
       - name: Initialize CodeQL
         uses: github/codeql-action/init@89a39a4e59826350b863aa6b6252a07ad50cf83e # v4
         with:
-          languages: ${{ matrix.language }}
-          queries: security-and-quality
+          languages: swift
+          queries: security-extended
 
-      - name: Autobuild
-        uses: github/codeql-action/autobuild@89a39a4e59826350b863aa6b6252a07ad50cf83e # v4
+      - name: Build
+        run: swift build
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@89a39a4e59826350b863aa6b6252a07ad50cf83e # v4
         with:
-          category: /language:${{ matrix.language }}
+          category: /language:swift

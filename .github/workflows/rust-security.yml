@@ -3,14 +3,8 @@ name: Rust Security
 on:
   push:
     branches: [main]
-    paths:
-      - "windows/**"
-      - "Examples/windows/SampleApp/src-tauri/**"
   pull_request:
     branches: [main]
-    paths:
-      - "windows/**"
-      - "Examples/windows/SampleApp/src-tauri/**"
   schedule:
     - cron: "0 7 * * 2" # Tuesday 7AM UTC
   workflow_dispatch:
@@ -19,8 +13,30 @@ permissions:
   contents: read
 
 jobs:
+  changes:
+    name: Detect Rust changes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      # Always run on push/schedule; on PRs only run if Rust files changed
+      rust: ${{ github.event_name != 'pull_request' || steps.filter.outputs.rust == 'true' }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3
+        id: filter
+        if: github.event_name == 'pull_request'
+        with:
+          filters: |
+            rust:
+              - 'windows/**'
+              - 'Examples/windows/SampleApp/src-tauri/**'
+
   cargo-audit:
     name: cargo audit
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -31,6 +47,8 @@ jobs:
 
   cargo-deny:
     name: cargo deny
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
