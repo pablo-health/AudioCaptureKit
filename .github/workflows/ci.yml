@@ -145,7 +145,10 @@ jobs:
   rust-test:
     name: Rust Test (${{ matrix.package }})
     needs: changes
-    if: needs.changes.outputs.rust == 'true'
+    # No job-level if: matrix jobs must always run so each expanded name
+    # (e.g. "Rust Test (audio-capture-core)") is individually reported to
+    # GitHub. A job-level if causes GitHub to report only the unexpanded
+    # template name, which never satisfies the required status checks.
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -159,12 +162,15 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - uses: dtolnay/rust-toolchain@stable
+        if: needs.changes.outputs.rust == 'true'
 
       - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
+        if: needs.changes.outputs.rust == 'true'
         with:
           workspaces: "windows -> windows/target"
 
       - name: Test
+        if: needs.changes.outputs.rust == 'true'
         run: cargo test --manifest-path windows/Cargo.toml -p ${{ matrix.package }}
 
   sample-app-lint:
