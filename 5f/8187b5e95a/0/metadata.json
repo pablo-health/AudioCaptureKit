@@ -1,0 +1,30 @@
+{
+  "cli_version": "0.4.7",
+  "checkpoint_id": "5f8187b5e95a",
+  "session_id": "5f48e65d-5b78-49f1-abb8-d0abf47c3478",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-03T02:50:50.497945Z",
+  "branch": "dependabot/swift/github.com/apple/swift-testing-6.2.4",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "Package.swift"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "5d849e37cc05",
+  "token_usage": {
+    "input_tokens": 36,
+    "cache_creation_tokens": 30236,
+    "cache_read_tokens": 1241736,
+    "output_tokens": 9075,
+    "api_call_count": 30
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-03T02:50:50.423357Z",
+    "agent_lines": 0,
+    "human_added": 108,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 108,
+    "agent_percentage": 0
+  }
+}
