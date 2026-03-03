@@ -1,0 +1,31 @@
+{
+  "cli_version": "0.4.7",
+  "checkpoint_id": "e10d28606901",
+  "session_id": "5f48e65d-5b78-49f1-abb8-d0abf47c3478",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-03T02:47:25.751756Z",
+  "branch": "fix/codeql-swift-path-filter",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "Package.swift",
+    "Package.resolved"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "93499839190e",
+  "token_usage": {
+    "input_tokens": 22,
+    "cache_creation_tokens": 23585,
+    "cache_read_tokens": 747676,
+    "output_tokens": 4767,
+    "api_call_count": 20
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-03T02:47:25.681775Z",
+    "agent_lines": 0,
+    "human_added": 0,
+    "human_modified": 3,
+    "human_removed": 20,
+    "total_committed": 0,
+    "agent_percentage": 0
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "cli_version": "0.4.7",
+  "checkpoint_id": "e10d28606901",
+  "strategy": "manual-commit",
+  "branch": "fix/codeql-swift-path-filter",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "Package.resolved",
+    "Package.swift"
+  ],
+  "sessions": [
+    {
+      "metadata": "/e1/0d28606901/0/metadata.json",
+      "transcript": "/e1/0d28606901/0/full.jsonl",
+      "context": "/e1/0d28606901/0/context.md",
+      "content_hash": "/e1/0d28606901/0/content_hash.txt",
+      "prompt": "/e1/0d28606901/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 22,
+    "cache_creation_tokens": 23585,
+    "cache_read_tokens": 747676,
+    "output_tokens": 4767,
+    "api_call_count": 20
+  }
+}
