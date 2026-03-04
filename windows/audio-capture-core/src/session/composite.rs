@@ -6,9 +6,10 @@ use std::time::{Duration, Instant};
 
 use parking_lot::Mutex;
 
-use crate::models::audio_models::{AudioLevels, AudioSource, CaptureSessionDiagnostics};
+use crate::models::audio_models::{AudioLevels, AudioSource, ChannelBuffers, CaptureSessionDiagnostics};
 use crate::models::config::CaptureConfiguration;
 use crate::models::error::CaptureError;
+use crate::models::mixing_strategy::MixingStrategy;
 use crate::models::recording_result::{RecordingMetadata, RecordingResult};
 use crate::models::state::CaptureState;
 use crate::processing::ring_buffer::RingBuffer;
@@ -17,6 +18,8 @@ use crate::processing::wav_format;
 use crate::storage::encrypted_writer::EncryptedFileWriter;
 use crate::traits::capture_delegate::CaptureDelegate;
 use crate::traits::capture_provider::CaptureProvider;
+
+pub type ChannelBufferCallback = Arc<dyn Fn(&ChannelBuffers) + Send + Sync + 'static>;
 
 /// Internal mutable session state, protected by `parking_lot::Mutex`.
 struct SessionState {
@@ -88,6 +91,15 @@ pub struct CompositeSession<M: CaptureProvider, S: CaptureProvider> {
 
     // Output file path for result
     file_path: Option<PathBuf>,
+
+    // Channel buffer callback for raw per-channel audio delivery
+    channel_buffer_callback: Option<ChannelBufferCallback>,
+
+    // PCM sidecar writers (when export_raw_pcm is enabled)
+    mic_pcm_writer: Arc<Mutex<Option<std::fs::File>>>,
+    system_pcm_writer: Arc<Mutex<Option<std::fs::File>>>,
+    mic_pcm_path: Option<PathBuf>,
+    system_pcm_path: Option<PathBuf>,
 }
 
 impl<M: CaptureProvider, S: CaptureProvider> CompositeSession<M, S> {
@@ -107,7 +119,16 @@ impl<M: CaptureProvider, S: CaptureProvider> CompositeSession<M, S> {
             timer_running: Arc::new(AtomicBool::new(false)),
             timer_handle: None,
             file_path: None,
+            channel_buffer_callback: None,
+            mic_pcm_writer: Arc::new(Mutex::new(None)),
+            system_pcm_writer: Arc::new(Mutex::new(None)),
+            mic_pcm_path: None,
+            system_pcm_path: None,
         }
+    }
+
+    pub fn set_channel_buffer_callback(&mut self, cb: ChannelBufferCallback) {
+        self.channel_buffer_callback = Some(cb);
     }
 
     pub fn set_delegate(&mut self, delegate: Arc<dyn CaptureDelegate>) {
@@ -188,9 +209,29 @@ impl<M: CaptureProvider, S: CaptureProvider> CompositeSession<M, S> {
         let file_path = config.output_directory.join(format!("{}.{}", file_name, file_ext));
         self.file_path = Some(file_path.clone());
 
-        let mut writer = EncryptedFileWriter::new(file_path, config.encryptor.clone());
+        let mut writer = EncryptedFileWriter::new(file_path.clone(), config.encryptor.clone());
         writer.open(config)?;
         *self.writer.lock() = Some(writer);
+
+        // Open PCM sidecar files if requested
+        if config.export_raw_pcm {
+            let mic_pcm_path = config.output_directory.join(format!("{}_mic.pcm", file_name));
+            let system_pcm_path = config.output_directory.join(format!("{}_system.pcm", file_name));
+            match std::fs::File::create(&mic_pcm_path) {
+                Ok(f) => {
+                    *self.mic_pcm_writer.lock() = Some(f);
+                    self.mic_pcm_path = Some(mic_pcm_path);
+                }
+                Err(e) => log::error!("Failed to create mic PCM sidecar: {}", e),
+            }
+            match std::fs::File::create(&system_pcm_path) {
+                Ok(f) => {
+                    *self.system_pcm_writer.lock() = Some(f);
+                    self.system_pcm_path = Some(system_pcm_path);
+                }
+                Err(e) => log::error!("Failed to create system PCM sidecar: {}", e),
+            }
+        }
 
         // Start mic capture
         if config.enable_mic_capture && self.mic.is_available() {
@@ -379,23 +420,52 @@ impl<M: CaptureProvider, S: CaptureProvider> CompositeSession<M, S> {
 
         let duration = self.session_state.lock().elapsed_duration();
 
-        let metadata = RecordingMetadata::new_stereo(
-            duration,
-            &file_path.to_string_lossy(),
-            &checksum,
-            config.encryptor.is_some(),
-            config.encryptor.as_ref().map(|e| e.algorithm().to_string()),
-            config
-                .encryptor
-                .as_ref()
-                .and_then(|e| e.key_metadata().get("keyId").cloned()),
-        );
+        let metadata = match config.mixing_strategy {
+            MixingStrategy::Separated => RecordingMetadata::new_separated(
+                duration,
+                &file_path.to_string_lossy(),
+                &checksum,
+                config.encryptor.is_some(),
+                config.encryptor.as_ref().map(|e| e.algorithm().to_string()),
+                config
+                    .encryptor
+                    .as_ref()
+                    .and_then(|e| e.key_metadata().get("keyId").cloned()),
+            ),
+            MixingStrategy::Blended | MixingStrategy::Multichannel => RecordingMetadata::new_stereo(
+                duration,
+                &file_path.to_string_lossy(),
+                &checksum,
+                config.encryptor.is_some(),
+                config.encryptor.as_ref().map(|e| e.algorithm().to_string()),
+                config
+                    .encryptor
+                    .as_ref()
+                    .and_then(|e| e.key_metadata().get("keyId").cloned()),
+            ),
+        };
+
+        // Close PCM sidecar files
+        *self.mic_pcm_writer.lock() = None;
+        *self.system_pcm_writer.lock() = None;
+
+        // Collect PCM sidecar paths
+        let mut raw_pcm_file_paths = Vec::new();
+        if config.export_raw_pcm {
+            if let Some(ref p) = self.mic_pcm_path {
+                raw_pcm_file_paths.push(p.clone());
+            }
+            if let Some(ref p) = self.system_pcm_path {
+                raw_pcm_file_paths.push(p.clone());
+            }
+        }
 
         let result = RecordingResult {
             file_path: file_path.clone(),
             duration_secs: duration,
             metadata,
             checksum,
+            raw_pcm_file_paths,
         };
 
         self.set_state(CaptureState::Completed(Box::new(result.clone())));
@@ -434,6 +504,11 @@ impl<M: CaptureProvider, S: CaptureProvider> CompositeSession<M, S> {
         let writer = Arc::clone(&self.writer);
         let mixer = self.mixer.clone();
         let enable_system = self.config.as_ref().map(|c| c.enable_system_capture).unwrap_or(false);
+        let mixing_strategy = self.config.as_ref().map(|c| c.mixing_strategy.clone()).unwrap_or_default();
+        let channel_buffer_callback = self.channel_buffer_callback.clone();
+        let export_raw_pcm = self.config.as_ref().map(|c| c.export_raw_pcm).unwrap_or(false);
+        let mic_pcm_writer = Arc::clone(&self.mic_pcm_writer);
+        let system_pcm_writer = Arc::clone(&self.system_pcm_writer);
 
         let chunk_size = (output_rate * 0.1) as usize; // 100ms of frames
 
@@ -460,6 +535,11 @@ impl<M: CaptureProvider, S: CaptureProvider> CompositeSession<M, S> {
                         &session_state,
                         enable_system,
                         chunk_size,
+                        &mixing_strategy,
+                        &channel_buffer_callback,
+                        export_raw_pcm,
+                        &mic_pcm_writer,
+                        &system_pcm_writer,
                     );
                 }
             })
@@ -517,6 +597,11 @@ impl<M: CaptureProvider, S: CaptureProvider> CompositeSession<M, S> {
             &self.session_state,
             enable_system,
             chunk_size,
+            &config.mixing_strategy,
+            &self.channel_buffer_callback,
+            config.export_raw_pcm,
+            &self.mic_pcm_writer,
+            &self.system_pcm_writer,
         );
     }
 
@@ -529,6 +614,11 @@ impl<M: CaptureProvider, S: CaptureProvider> CompositeSession<M, S> {
         session_state: &Mutex<SessionState>,
         enable_system: bool,
         chunk_size: usize,
+        mixing_strategy: &MixingStrategy,
+        channel_buffer_callback: &Option<ChannelBufferCallback>,
+        export_raw_pcm: bool,
+        mic_pcm_writer: &Mutex<Option<std::fs::File>>,
+        system_pcm_writer: &Mutex<Option<std::fs::File>>,
     ) {
         let mic_samples: Vec<f32>;
         let system_samples: Vec<f32>;
@@ -552,8 +642,39 @@ impl<M: CaptureProvider, S: CaptureProvider> CompositeSession<M, S> {
             }
         }
 
-        // Mix: Left = mic + sysL, Right = mic + sysR
-        let stereo = mixer.mix_mic_with_stereo_system(&mic_samples, &system_samples);
+        // Deliver raw channel buffers before mixing
+        if let Some(ref cb) = channel_buffer_callback {
+            let buffers = ChannelBuffers {
+                mic_samples: mic_samples.clone(),
+                system_samples: system_samples.clone(),
+                sample_rate: mixer.target_sample_rate,
+                timestamp_unix_secs: {
+                    use std::time::{SystemTime, UNIX_EPOCH};
+                    SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .map(|d| d.as_secs_f64())
+                        .unwrap_or(0.0)
+                },
+            };
+            cb(&buffers);
+        }
+
+        // Write raw PCM sidecars if enabled
+        if export_raw_pcm {
+            let mic_pcm = mixer.convert_to_int16_pcm(&mic_samples);
+            let system_pcm = mixer.convert_to_int16_pcm(&system_samples);
+            if let Some(ref mut f) = *mic_pcm_writer.lock() {
+                use std::io::Write;
+                let _ = f.write_all(&mic_pcm);
+            }
+            if let Some(ref mut f) = *system_pcm_writer.lock() {
+                use std::io::Write;
+                let _ = f.write_all(&system_pcm);
+            }
+        }
+
+        // Mix according to strategy
+        let stereo = mixer.mix(&mic_samples, &system_samples, mixing_strategy);
 
         // Convert to 16-bit PCM
         let pcm = mixer.convert_to_int16_pcm(&stereo);

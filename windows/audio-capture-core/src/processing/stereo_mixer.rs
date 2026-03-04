@@ -1,3 +1,5 @@
+use crate::models::mixing_strategy::MixingStrategy;
+
 /// Pure-math stereo audio mixer and resampler.
 ///
 /// Ports the Swift `StereoMixer` 1:1. All operations work on `&[f32]` buffers
@@ -150,6 +152,43 @@ impl StereoMixer {
     /// Compute peak absolute level of samples.
     pub fn peak_level(samples: &[f32]) -> f32 {
         samples.iter().map(|s| s.abs()).fold(0.0f32, f32::max)
+    }
+
+    /// Mixes mic and system audio according to the specified strategy.
+    ///
+    /// This is the preferred entry point. `mix_mic_with_stereo_system` is kept
+    /// for backward compatibility but prefer this method.
+    pub fn mix(&self, mic: &[f32], system: &[f32], strategy: &MixingStrategy) -> Vec<f32> {
+        match strategy {
+            MixingStrategy::Blended | MixingStrategy::Multichannel => {
+                self.mix_mic_with_stereo_system(mic, system)
+            }
+            MixingStrategy::Separated => self.separate_channels(mic, system),
+        }
+    }
+
+    /// Produces separated-channel stereo: Left = mic, Right = system mono-fold.
+    ///
+    /// - Left[i]  = mic[i] (zero-padded when mic is shorter)
+    /// - Right[i] = (system[2*i] + system[2*i+1]) / 2  (mono-fold preserving both channels)
+    ///
+    /// Frame count = max(mic.len(), system.len() / 2).
+    pub fn separate_channels(&self, mic: &[f32], system: &[f32]) -> Vec<f32> {
+        let mic_frames = mic.len();
+        let system_frames = system.len() / 2;
+        let frame_count = mic_frames.max(system_frames);
+        if frame_count == 0 {
+            return Vec::new();
+        }
+
+        let mut stereo = vec![0.0f32; frame_count * 2];
+        for i in 0..frame_count {
+            stereo[i * 2] = if i < mic_frames { mic[i] } else { 0.0 }; // Left = mic
+            let sys_l = if i * 2 < system.len() { system[i * 2] } else { 0.0 };
+            let sys_r = if i * 2 + 1 < system.len() { system[i * 2 + 1] } else { 0.0 };
+            stereo[i * 2 + 1] = (sys_l + sys_r) / 2.0; // Right = mono-fold
+        }
+        stereo
     }
 }
 
@@ -310,5 +349,96 @@ mod tests {
     #[test]
     fn peak_level_basic() {
         assert!((StereoMixer::peak_level(&[0.1, -0.5, 0.3]) - 0.5).abs() < 1e-6);
+    }
+
+    #[test]
+    fn separate_channels_left_is_mic_only() {
+        let mixer = StereoMixer::new(48000.0);
+        let mic = [0.5f32, 0.3];
+        let system = [0.1f32, 0.2, 0.1, 0.2];
+        let result = mixer.separate_channels(&mic, &system);
+        assert!((result[0] - 0.5).abs() < 1e-6); // frame 0, L = mic
+        assert!((result[2] - 0.3).abs() < 1e-6); // frame 1, L = mic
+    }
+
+    #[test]
+    fn separate_channels_right_is_system_mono_fold_not_l_only() {
+        let mixer = StereoMixer::new(48000.0);
+        let mic = [0.0f32, 0.0];
+        let system = [0.8f32, 0.4, 0.8, 0.4];
+        let result = mixer.separate_channels(&mic, &system);
+        // Right = (0.8 + 0.4) / 2 = 0.6, NOT 0.8 (L only)
+        assert!((result[1] - 0.6).abs() < 1e-6);
+        assert!((result[3] - 0.6).abs() < 1e-6);
+    }
+
+    #[test]
+    fn separate_channels_silent_mic_left_is_zero() {
+        let mixer = StereoMixer::new(48000.0);
+        let mic = [0.0f32, 0.0];
+        let system = [0.5f32, 0.5, 0.5, 0.5];
+        let result = mixer.separate_channels(&mic, &system);
+        assert!(result[0].abs() < 1e-6);
+        assert!(result[2].abs() < 1e-6);
+    }
+
+    #[test]
+    fn separate_channels_silent_system_right_is_zero() {
+        let mixer = StereoMixer::new(48000.0);
+        let mic = [0.5f32, 0.3];
+        let system = [0.0f32, 0.0, 0.0, 0.0];
+        let result = mixer.separate_channels(&mic, &system);
+        assert!(result[1].abs() < 1e-6);
+        assert!(result[3].abs() < 1e-6);
+    }
+
+    #[test]
+    fn separate_channels_mic_longer_zero_pads_right() {
+        let mixer = StereoMixer::new(48000.0);
+        let mic = [0.5f32, 0.3, 0.1];
+        let system = [0.2f32, 0.2]; // 1 stereo frame
+        let result = mixer.separate_channels(&mic, &system);
+        assert_eq!(result.len(), 6); // 3 frames
+        // frame 2: L = mic[2] = 0.1, R = 0 (system exhausted)
+        assert!((result[4] - 0.1).abs() < 1e-6);
+        assert!(result[5].abs() < 1e-6);
+    }
+
+    #[test]
+    fn separate_channels_system_longer_zero_pads_left() {
+        let mixer = StereoMixer::new(48000.0);
+        let mic = [0.5f32]; // 1 frame
+        let system = [0.2f32, 0.4, 0.6, 0.8, 0.2, 0.4]; // 3 stereo frames
+        let result = mixer.separate_channels(&mic, &system);
+        assert_eq!(result.len(), 6); // 3 frames
+        // frame 1: L = 0 (mic exhausted), R = (0.6 + 0.8) / 2 = 0.7
+        assert!(result[2].abs() < 1e-6);
+        assert!((result[3] - 0.7).abs() < 1e-6);
+    }
+
+    #[test]
+    fn separate_channels_both_empty() {
+        let mixer = StereoMixer::new(48000.0);
+        assert!(mixer.separate_channels(&[], &[]).is_empty());
+    }
+
+    #[test]
+    fn mix_blended_matches_legacy() {
+        let mixer = StereoMixer::new(48000.0);
+        let mic = [0.5f32, 0.3];
+        let system = [0.1f32, 0.2, 0.3, 0.4];
+        let legacy = mixer.mix_mic_with_stereo_system(&mic, &system);
+        let new_method = mixer.mix(&mic, &system, &MixingStrategy::Blended);
+        assert_eq!(legacy, new_method);
+    }
+
+    #[test]
+    fn mix_separated_no_mic_in_right_channel() {
+        let mixer = StereoMixer::new(48000.0);
+        let mic = [0.5f32, 0.3];
+        let system = [0.0f32, 0.0, 0.0, 0.0];
+        let result = mixer.mix(&mic, &system, &MixingStrategy::Separated);
+        assert!(result[1].abs() < 1e-6);
+        assert!(result[3].abs() < 1e-6);
     }
 }

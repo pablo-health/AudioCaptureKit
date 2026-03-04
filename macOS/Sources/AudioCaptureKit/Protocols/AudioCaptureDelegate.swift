@@ -28,4 +28,17 @@ public protocol AudioCaptureDelegate: AnyObject, Sendable {
     ///   - session: The capture session that finished.
     ///   - result: The recording result containing file URL, duration, and metadata.
     func captureSession(_ session: any AudioCaptureSession, didFinishCapture result: RecordingResult)
+
+    /// Called on each processing cycle (~100 ms intervals) with raw per-channel
+    /// audio samples, before mixing and file writing.
+    ///
+    /// Called on an unspecified background queue. Implementations must be
+    /// non-blocking; dispatch heavy work asynchronously.
+    func captureSession(_ session: any AudioCaptureSession,
+                        didProduceChannelBuffers buffers: ChannelBuffers)
+}
+
+public extension AudioCaptureDelegate {
+    func captureSession(_ session: any AudioCaptureSession,
+                        didProduceChannelBuffers buffers: ChannelBuffers) {}
 }

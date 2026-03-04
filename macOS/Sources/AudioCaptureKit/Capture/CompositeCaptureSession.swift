@@ -34,6 +34,9 @@ public final class CompositeCaptureSession: @unchecked Sendable {
         var diagnostics = CaptureSessionDiagnostics()
         /// Actual mic sample rate detected from the first callback (may differ from config).
         var detectedMicRate: Double?
+        var micPCMFileHandle: FileHandle?
+        var systemPCMFileHandle: FileHandle?
+        var rawPCMFileURLs: [URL] = []
     }
 
     let sessionState: UnfairLock<SessionState>
@@ -138,9 +141,11 @@ extension CompositeCaptureSession: AudioCaptureSession {
             setState(.failed(.configurationFailed("Invalid bit depth")))
             throw CaptureError.configurationFailed("Bit depth must be 16, 24, or 32")
         }
-        guard configuration.channels > 0, configuration.channels <= 2 else {
+        // Channels 1–2 are active; 3–4 are reserved for future multi-mic support.
+        // The mixer currently produces 2-channel output regardless of channel count.
+        guard (1...4).contains(configuration.channels) else {
             setState(.failed(.configurationFailed("Invalid channel count")))
-            throw CaptureError.configurationFailed("Channel count must be 1 or 2")
+            throw CaptureError.configurationFailed("Channel count must be 1–4")
         }
 
         sessionState.withLock { $0.configuration = configuration }
@@ -269,7 +274,9 @@ extension CompositeCaptureSession: AudioCaptureSession {
             maxDuration: config.maxDuration,
             micDeviceID: config.micDeviceID,
             enableMicCapture: config.enableMicCapture,
-            enableSystemCapture: config.enableSystemCapture
+            enableSystemCapture: config.enableSystemCapture,
+            mixingStrategy: config.mixingStrategy,
+            exportRawPCM: config.exportRawPCM
         )
 
         do {
@@ -277,6 +284,40 @@ extension CompositeCaptureSession: AudioCaptureSession {
         } catch {
             setState(.failed(.storageError("Failed to open file")))
             throw error
+        }
+
+        if config.exportRawPCM {
+            openPCMSidecarFiles(baseName: fileName, directory: config.outputDirectory)
+        }
+    }
+
+    /// Opens PCM sidecar files for raw channel export.
+    private func openPCMSidecarFiles(baseName: String, directory: URL) {
+        let micURL = directory.appendingPathComponent("\(baseName)_mic.pcm")
+        let systemURL = directory.appendingPathComponent("\(baseName)_system.pcm")
+        let fm = FileManager.default
+
+        var handles: (mic: FileHandle?, system: FileHandle?) = (nil, nil)
+
+        if fm.createFile(atPath: micURL.path, contents: nil) {
+            handles.mic = FileHandle(forWritingAtPath: micURL.path)
+        } else {
+            logger.warning("Failed to create mic PCM sidecar at \(micURL.path)")
+        }
+
+        if fm.createFile(atPath: systemURL.path, contents: nil) {
+            handles.system = FileHandle(forWritingAtPath: systemURL.path)
+        } else {
+            logger.warning("Failed to create system PCM sidecar at \(systemURL.path)")
+        }
+
+        sessionState.withLock {
+            $0.micPCMFileHandle = handles.mic
+            $0.systemPCMFileHandle = handles.system
+            var urls: [URL] = []
+            if handles.mic != nil { urls.append(micURL) }
+            if handles.system != nil { urls.append(systemURL) }
+            $0.rawPCMFileURLs = urls
         }
     }
 

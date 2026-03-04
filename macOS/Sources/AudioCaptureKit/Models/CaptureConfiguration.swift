@@ -29,6 +29,16 @@ public struct CaptureConfiguration: Sendable {
     /// Whether to capture system audio. Default is true.
     public let enableSystemCapture: Bool
 
+    /// Determines how mic and system audio are combined into the output WAV.
+    /// Default is ``MixingStrategy/blended`` to preserve existing behavior.
+    public let mixingStrategy: MixingStrategy
+
+    /// When true, writes raw PCM sidecar files alongside the WAV:
+    /// - `{name}_mic.pcm`    — mono mic, signed 16-bit LE, no header
+    /// - `{name}_system.pcm` — interleaved stereo system audio, signed 16-bit LE, no header
+    /// Default: false.
+    public let exportRawPCM: Bool
+
     public init(
         sampleRate: Double = 48000,
         bitDepth: Int = 16,
@@ -38,7 +48,9 @@ public struct CaptureConfiguration: Sendable {
         maxDuration: TimeInterval? = nil,
         micDeviceID: String? = nil,
         enableMicCapture: Bool = true,
-        enableSystemCapture: Bool = true
+        enableSystemCapture: Bool = true,
+        mixingStrategy: MixingStrategy = .blended,
+        exportRawPCM: Bool = false
     ) {
         self.sampleRate = sampleRate
         self.bitDepth = bitDepth
@@ -49,5 +61,7 @@ public struct CaptureConfiguration: Sendable {
         self.micDeviceID = micDeviceID
         self.enableMicCapture = enableMicCapture
         self.enableSystemCapture = enableSystemCapture
+        self.mixingStrategy = mixingStrategy
+        self.exportRawPCM = exportRawPCM
     }
 }

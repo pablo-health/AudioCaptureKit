@@ -99,6 +99,15 @@ The main entry point for audio capture.
 
 Valid bit depths: 16, 24, 32.
 
+Valid channel counts: 1–4. Channels 3–4 are reserved for future multi-mic support; the mixer currently produces 2-channel output regardless.
+
+| Property | Swift | Rust | Default |
+|----------|-------|------|---------|
+| Mixing strategy | `mixingStrategy: MixingStrategy` | `mixing_strategy: MixingStrategy` | `.blended` / `Blended` |
+| Export raw PCM | `exportRawPCM: Bool` | `export_raw_pcm: bool` | false |
+
+See [DIARIZATION.md](DIARIZATION.md) for full mixing strategy documentation.
+
 ---
 
 ## State Machine
@@ -140,6 +149,9 @@ idle → configuring → ready → capturing ↔ paused → stopping → complet
 | Levels updated | `captureSession(_:didUpdateLevels:)` | `on_levels_updated(&self, levels: &AudioLevels)` |
 | Error | `captureSession(_:didEncounterError:)` | `on_error(&self, error: &CaptureError)` |
 | Finished | `captureSession(_:didFinishCapture:)` | `on_capture_finished(&self, result: &RecordingResult)` |
+| Channel buffers | `captureSession(_:didProduceChannelBuffers:)` | `set_channel_buffer_callback(cb: ChannelBufferCallback)` |
+
+The `didProduceChannelBuffers` callback (Swift) / `ChannelBufferCallback` (Rust) fires on every processing cycle (~100 ms) with raw per-channel audio before mixing. Has a default no-op implementation in Swift so existing delegates compile unchanged. See [DIARIZATION.md](DIARIZATION.md) for usage examples.
 
 ---
 
@@ -212,6 +224,40 @@ Returned by `stopCapture()`.
 | Duration | `duration: TimeInterval` | `duration_secs: f64` |
 | Metadata | `metadata: RecordingMetadata` | `metadata: RecordingMetadata` |
 | Checksum | `checksum: String` | `checksum: String` |
+| Raw PCM files | `rawPCMFileURLs: [URL]` | `raw_pcm_file_paths: Vec<PathBuf>` |
+
+`rawPCMFileURLs` / `raw_pcm_file_paths` is empty unless `exportRawPCM` was enabled. When populated: index 0 = mic (mono), index 1 = system (stereo interleaved).
+
+### ChannelBuffers
+
+Raw per-channel audio from one processing cycle. Delivered via the channel buffers callback before mixing.
+
+| Property | Swift | Rust |
+|----------|-------|------|
+| Mic audio | `micSamples: [Float]` | `mic_samples: Vec<f32>` |
+| System audio | `systemSamples: [Float]` | `system_samples: Vec<f32>` |
+| Sample rate | `sampleRate: Double` | `sample_rate: f64` |
+| Timestamp | `timestamp: Date` | `timestamp_unix_secs: f64` |
+
+`systemSamples` / `system_samples` is always full interleaved stereo `[L0, R0, L1, R1, ...]`. The library never folds it to mono.
+
+### ChannelLayout
+
+Records the actual WAV channel layout in `RecordingMetadata`. Old recordings without this field decode as `blended`.
+
+| Value | Swift | Rust | Meaning |
+|-------|-------|------|---------|
+| Blended | `.blended` | `Blended` | Mic mixed into both channels |
+| Separated stereo | `.separatedStereo` | `SeparatedStereo` | Ch1 = mic, Ch2 = system mono-fold |
+| Mono | `.mono` | `Mono` | Single mono channel |
+
+### MixingStrategy
+
+| Value | Swift | Rust | WAV layout |
+|-------|-------|------|-----------|
+| Blended (default) | `.blended` | `Blended` | mic+sysL / mic+sysR |
+| Separated | `.separated` | `Separated` | mic only / system (L+R)/2 |
+| Multichannel | `.multichannel` | `Multichannel` | same as separated (reserved) |
 
 ### AudioLevels
 
@@ -249,10 +295,22 @@ Represents a discovered audio device.
 | Timeout | `.timeout` | `Timeout` |
 | Unknown | `.unknown(String)` | `Unknown(String)` |
 
+### AudioTrack
+
+| Property | Swift | Rust | Notes |
+|----------|-------|------|-------|
+| Type | `type: AudioTrackType` | `track_type: AudioTrackType` | |
+| Channel | `channel: AudioChannel` | `channel: AudioChannel` | |
+| Label | `label: String?` | `label: Option<String>` | Omitted from JSON when nil |
+
 ### Enums
 
 **AudioTrackType**: `mic`, `system`
 
-**AudioChannel**: `left`, `right`, `center`, `stereo`
+**AudioChannel**: `left` (L), `right` (R), `center` (C), `stereo` (LR)
 
 **AudioTransportType**: `builtIn`, `bluetooth`, `bluetoothLE`, `usb`, `virtual`, `unknown`
+
+**MixingStrategy**: `blended` (default), `separated`, `multichannel` — see [DIARIZATION.md](DIARIZATION.md)
+
+**ChannelLayout**: `blended` (default), `separatedStereo`, `mono`

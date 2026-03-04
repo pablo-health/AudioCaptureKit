@@ -26,14 +26,16 @@ pub mod traits;
 // Re-export key types at crate root for convenience.
 pub use models::audio_models::{
     AudioChannel, AudioLevels, AudioSource, AudioTrack, AudioTrackType, AudioTransportType,
+    ChannelBuffers, ChannelLayout,
 };
 pub use models::config::CaptureConfiguration;
 pub use models::error::CaptureError;
+pub use models::mixing_strategy::MixingStrategy;
 pub use models::recording_result::{RecordingMetadata, RecordingResult};
 pub use models::state::CaptureState;
 pub use processing::ring_buffer::RingBuffer;
 pub use processing::stereo_mixer::StereoMixer;
-pub use session::composite::CompositeSession;
+pub use session::composite::{ChannelBufferCallback, CompositeSession};
 pub use storage::encrypted_writer::EncryptedFileWriter;
 pub use traits::capture_delegate::CaptureDelegate;
 pub use traits::capture_provider::{AudioBufferCallback, CaptureProvider};
