@@ -67,9 +67,9 @@ public struct StereoMixer: Sendable {
     public func mix(mic: [Float], system: [Float], strategy: MixingStrategy) -> [Float] {
         switch strategy {
         case .blended, .multichannel:
-            return mixMicWithStereoSystem(mic: mic, system: system)
+            mixMicWithStereoSystem(mic: mic, system: system)
         case .separated:
-            return separateChannels(mic: mic, system: system)
+            separateChannels(mic: mic, system: system)
         }
     }
 

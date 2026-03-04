@@ -413,7 +413,7 @@ mod tests {
         let system = [0.2f32, 0.4, 0.6, 0.8, 0.2, 0.4]; // 3 stereo frames
         let result = mixer.separate_channels(&mic, &system);
         assert_eq!(result.len(), 6); // 3 frames
-        // frame 1: L = 0 (mic exhausted), R = (0.6 + 0.8) / 2 = 0.7
+                                     // frame 1: L = 0 (mic exhausted), R = (0.6 + 0.8) / 2 = 0.7
         assert!(result[2].abs() < 1e-6);
         assert!((result[3] - 0.7).abs() < 1e-6);
     }

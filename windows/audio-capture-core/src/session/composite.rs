@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 
 use parking_lot::Mutex;
 
-use crate::models::audio_models::{AudioLevels, AudioSource, ChannelBuffers, CaptureSessionDiagnostics};
+use crate::models::audio_models::{AudioLevels, AudioSource, CaptureSessionDiagnostics, ChannelBuffers};
 use crate::models::config::CaptureConfiguration;
 use crate::models::error::CaptureError;
 use crate::models::mixing_strategy::MixingStrategy;
@@ -517,7 +517,11 @@ impl<M: CaptureProvider, S: CaptureProvider> CompositeSession<M, S> {
         let ctx = ProcessingContext {
             enable_system: self.config.as_ref().map(|c| c.enable_system_capture).unwrap_or(false),
             chunk_size: (output_rate * 0.1) as usize, // 100ms of frames
-            mixing_strategy: self.config.as_ref().map(|c| c.mixing_strategy.clone()).unwrap_or_default(),
+            mixing_strategy: self
+                .config
+                .as_ref()
+                .map(|c| c.mixing_strategy.clone())
+                .unwrap_or_default(),
             channel_buffer_callback: self.channel_buffer_callback.clone(),
             export_raw_pcm: self.config.as_ref().map(|c| c.export_raw_pcm).unwrap_or(false),
             mic_pcm_writer: Arc::clone(&self.mic_pcm_writer),
@@ -539,14 +543,7 @@ impl<M: CaptureProvider, S: CaptureProvider> CompositeSession<M, S> {
                         continue;
                     }
 
-                    Self::process_buffers_inner(
-                        &mic_buf,
-                        &sys_buf,
-                        &writer,
-                        &mixer,
-                        &session_state,
-                        &ctx,
-                    );
+                    Self::process_buffers_inner(&mic_buf, &sys_buf, &writer, &mixer, &session_state, &ctx);
                 }
             })
             .expect("failed to spawn processing thread");

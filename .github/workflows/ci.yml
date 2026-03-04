@@ -52,14 +52,14 @@ jobs:
 
       - name: Install SwiftLint
         run: |
-          SWIFTLINT_VERSION=0.57.1
+          SWIFTLINT_VERSION=0.63.2
           curl -sL "https://github.com/realm/SwiftLint/releases/download/${SWIFTLINT_VERSION}/portable_swiftlint.zip" -o swiftlint.zip
           unzip -q swiftlint.zip -d swiftlint
           echo "$PWD/swiftlint" >> "$GITHUB_PATH"
 
       - name: Install SwiftFormat
         run: |
-          SWIFTFORMAT_VERSION=0.55.5
+          SWIFTFORMAT_VERSION=0.59.1
           curl -sL "https://github.com/nicklockwood/SwiftFormat/releases/download/${SWIFTFORMAT_VERSION}/swiftformat.zip" -o swiftformat.zip
           unzip -q swiftformat.zip
           chmod +x swiftformat

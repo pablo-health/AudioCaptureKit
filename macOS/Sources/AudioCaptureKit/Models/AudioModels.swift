@@ -95,7 +95,7 @@ public enum ChannelLayout: String, Sendable, Codable {
     /// Mic mixed into both channels (legacy/blended strategy).
     case blended
     /// Ch1 (Left) = mic only, Ch2 (Right) = system audio mono-folded (L+R)/2.
-    case separatedStereo = "separatedStereo"
+    case separatedStereo
     /// Single mono channel.
     case mono
 }

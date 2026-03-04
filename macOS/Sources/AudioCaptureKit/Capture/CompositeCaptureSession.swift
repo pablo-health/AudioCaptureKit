@@ -143,7 +143,7 @@ extension CompositeCaptureSession: AudioCaptureSession {
         }
         // Channels 1–2 are active; 3–4 are reserved for future multi-mic support.
         // The mixer currently produces 2-channel output regardless of channel count.
-        guard (1...4).contains(configuration.channels) else {
+        guard (1 ... 4).contains(configuration.channels) else {
             setState(.failed(.configurationFailed("Invalid channel count")))
             throw CaptureError.configurationFailed("Channel count must be 1–4")
         }

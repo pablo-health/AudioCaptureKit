@@ -43,7 +43,6 @@ opt_in_rules:
   - private_action
   - private_outlet
   - prohibited_super_call
-  - raw_value_for_camel_cased_codable_enum
   - reduce_into
   - redundant_nil_coalescing
   - redundant_type_annotation

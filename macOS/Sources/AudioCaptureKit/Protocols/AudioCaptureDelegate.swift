@@ -34,11 +34,15 @@ public protocol AudioCaptureDelegate: AnyObject, Sendable {
     ///
     /// Called on an unspecified background queue. Implementations must be
     /// non-blocking; dispatch heavy work asynchronously.
-    func captureSession(_ session: any AudioCaptureSession,
-                        didProduceChannelBuffers buffers: ChannelBuffers)
+    func captureSession(
+        _ session: any AudioCaptureSession,
+        didProduceChannelBuffers buffers: ChannelBuffers
+    )
 }
 
-public extension AudioCaptureDelegate {
-    func captureSession(_ session: any AudioCaptureSession,
-                        didProduceChannelBuffers buffers: ChannelBuffers) {}
+extension AudioCaptureDelegate {
+    public func captureSession(
+        _: any AudioCaptureSession,
+        didProduceChannelBuffers _: ChannelBuffers
+    ) {}
 }

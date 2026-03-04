@@ -44,7 +44,8 @@ extension CompositeCaptureSession {
 
         let config = configuration
         let chunkSize = Int(config.sampleRate * 0.1) // 100ms frames
-        guard let (micSamples, systemSamples) = await readPendingSamples(config: config, chunkSize: chunkSize) else { return }
+        guard let (micSamples, systemSamples) =
+            await readPendingSamples(config: config, chunkSize: chunkSize) else { return }
 
         // Deliver raw channel buffers to delegate before mixing
         let channelBuffers = ChannelBuffers(
@@ -88,9 +89,9 @@ extension CompositeCaptureSession {
         guard let micBuf = micBuffer, let sysBuf = systemBuffer else { return nil }
 
         if config.enableSystemCapture {
-            let frames = min(await sysBuf.count / 2, chunkSize)
+            let frames = await min(sysBuf.count / 2, chunkSize)
             guard frames > 0 else { return nil }
-            return (mic: await micBuf.read(count: frames), system: await sysBuf.read(count: frames * 2))
+            return await (mic: micBuf.read(count: frames), system: sysBuf.read(count: frames * 2))
         } else {
             let mic = await micBuf.read(count: chunkSize)
             return mic.isEmpty ? nil : (mic: mic, system: [])
