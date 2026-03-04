@@ -1,0 +1,28 @@
+{
+  "cli_version": "0.4.7",
+  "checkpoint_id": "6352432c4d0c",
+  "strategy": "manual-commit",
+  "branch": "feature/channel-diarization-support",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "macOS/Sources/AudioCaptureKit/Capture/CompositeCaptureSession+Processing.swift",
+    "macOS/Sources/AudioCaptureKit/Models/AudioModels.swift",
+    "windows/audio-capture-core/src/processing/stereo_mixer.rs"
+  ],
+  "sessions": [
+    {
+      "metadata": "/63/52432c4d0c/0/metadata.json",
+      "transcript": "/63/52432c4d0c/0/full.jsonl",
+      "context": "/63/52432c4d0c/0/context.md",
+      "content_hash": "/63/52432c4d0c/0/content_hash.txt",
+      "prompt": "/63/52432c4d0c/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 434,
+    "cache_creation_tokens": 82470,
+    "cache_read_tokens": 5268540,
+    "output_tokens": 38057,
+    "api_call_count": 64
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "cli_version": "0.4.7",
+  "checkpoint_id": "6352432c4d0c",
+  "session_id": "70b6ddda-aff7-4ac6-87e0-1d295e426e29",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-04T02:28:17.955407Z",
+  "branch": "feature/channel-diarization-support",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "macOS/Sources/AudioCaptureKit/Models/AudioModels.swift",
+    "macOS/Sources/AudioCaptureKit/Capture/CompositeCaptureSession+Processing.swift",
+    "windows/audio-capture-core/src/processing/stereo_mixer.rs"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "0fe2083ba5ef",
+  "token_usage": {
+    "input_tokens": 434,
+    "cache_creation_tokens": 82470,
+    "cache_read_tokens": 5268540,
+    "output_tokens": 38057,
+    "api_call_count": 64
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-04T02:28:17.774253Z",
+    "agent_lines": 6,
+    "human_added": 24,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 30,
+    "agent_percentage": 20
+  }
+}

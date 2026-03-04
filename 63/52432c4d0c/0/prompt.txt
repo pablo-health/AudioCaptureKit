@@ -1,0 +1,25 @@
+pull latest from this branch please as we did windows impl on windows claude code.   Github  CI is having linting errors
+
+---
+
+just did git config - can you ammend/fix previous commits in this branch
+
+---
+
+uggh you're killing me :-)  can you run the same linters we have in CI - and fix the errors
+
+---
+
+[Request interrupted by user]
+
+---
+
+CI is failing on Swift and Rust lint
+
+---
+
+[Request interrupted by user for tool use]
+
+---
+
+can we update CI to the later linter?  we shouldn't go backwards with our code
