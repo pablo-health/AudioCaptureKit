@@ -6,11 +6,15 @@ export interface DeviceInfo {
   is_default: boolean;
 }
 
+export type MixingStrategy = "blended" | "separated" | "multichannel";
+
 export interface RecordingConfig {
   micDeviceId: string | null;
   enableMic: boolean;
   enableSystem: boolean;
   encrypt: boolean;
+  mixingStrategy: MixingStrategy;
+  exportRawPcm: boolean;
 }
 
 export interface RecordingInfo {

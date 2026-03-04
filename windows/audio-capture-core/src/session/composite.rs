@@ -21,6 +21,17 @@ use crate::traits::capture_provider::CaptureProvider;
 
 pub type ChannelBufferCallback = Arc<dyn Fn(&ChannelBuffers) + Send + Sync + 'static>;
 
+/// Parameters for mixing, diarization, and raw PCM export during processing.
+struct ProcessingContext {
+    enable_system: bool,
+    chunk_size: usize,
+    mixing_strategy: MixingStrategy,
+    channel_buffer_callback: Option<ChannelBufferCallback>,
+    export_raw_pcm: bool,
+    mic_pcm_writer: Arc<Mutex<Option<std::fs::File>>>,
+    system_pcm_writer: Arc<Mutex<Option<std::fs::File>>>,
+}
+
 /// Internal mutable session state, protected by `parking_lot::Mutex`.
 struct SessionState {
     state: CaptureState,
@@ -503,14 +514,15 @@ impl<M: CaptureProvider, S: CaptureProvider> CompositeSession<M, S> {
         let sys_buf = Arc::clone(&self.system_buffer);
         let writer = Arc::clone(&self.writer);
         let mixer = self.mixer.clone();
-        let enable_system = self.config.as_ref().map(|c| c.enable_system_capture).unwrap_or(false);
-        let mixing_strategy = self.config.as_ref().map(|c| c.mixing_strategy.clone()).unwrap_or_default();
-        let channel_buffer_callback = self.channel_buffer_callback.clone();
-        let export_raw_pcm = self.config.as_ref().map(|c| c.export_raw_pcm).unwrap_or(false);
-        let mic_pcm_writer = Arc::clone(&self.mic_pcm_writer);
-        let system_pcm_writer = Arc::clone(&self.system_pcm_writer);
-
-        let chunk_size = (output_rate * 0.1) as usize; // 100ms of frames
+        let ctx = ProcessingContext {
+            enable_system: self.config.as_ref().map(|c| c.enable_system_capture).unwrap_or(false),
+            chunk_size: (output_rate * 0.1) as usize, // 100ms of frames
+            mixing_strategy: self.config.as_ref().map(|c| c.mixing_strategy.clone()).unwrap_or_default(),
+            channel_buffer_callback: self.channel_buffer_callback.clone(),
+            export_raw_pcm: self.config.as_ref().map(|c| c.export_raw_pcm).unwrap_or(false),
+            mic_pcm_writer: Arc::clone(&self.mic_pcm_writer),
+            system_pcm_writer: Arc::clone(&self.system_pcm_writer),
+        };
 
         let handle = thread::Builder::new()
             .name("audio-processing".into())
@@ -533,13 +545,7 @@ impl<M: CaptureProvider, S: CaptureProvider> CompositeSession<M, S> {
                         &writer,
                         &mixer,
                         &session_state,
-                        enable_system,
-                        chunk_size,
-                        &mixing_strategy,
-                        &channel_buffer_callback,
-                        export_raw_pcm,
-                        &mic_pcm_writer,
-                        &system_pcm_writer,
+                        &ctx,
                     );
                 }
             })
@@ -586,8 +592,16 @@ impl<M: CaptureProvider, S: CaptureProvider> CompositeSession<M, S> {
             Some(c) => c,
             None => return,
         };
-        let chunk_size = (config.sample_rate * 0.1) as usize;
-        let enable_system = config.enable_system_capture;
+
+        let ctx = ProcessingContext {
+            enable_system: config.enable_system_capture,
+            chunk_size: (config.sample_rate * 0.1) as usize,
+            mixing_strategy: config.mixing_strategy.clone(),
+            channel_buffer_callback: self.channel_buffer_callback.clone(),
+            export_raw_pcm: config.export_raw_pcm,
+            mic_pcm_writer: Arc::clone(&self.mic_pcm_writer),
+            system_pcm_writer: Arc::clone(&self.system_pcm_writer),
+        };
 
         Self::process_buffers_inner(
             &self.mic_buffer,
@@ -595,13 +609,7 @@ impl<M: CaptureProvider, S: CaptureProvider> CompositeSession<M, S> {
             &self.writer,
             &self.mixer,
             &self.session_state,
-            enable_system,
-            chunk_size,
-            &config.mixing_strategy,
-            &self.channel_buffer_callback,
-            config.export_raw_pcm,
-            &self.mic_pcm_writer,
-            &self.system_pcm_writer,
+            &ctx,
         );
     }
 
@@ -612,21 +620,15 @@ impl<M: CaptureProvider, S: CaptureProvider> CompositeSession<M, S> {
         writer: &Mutex<Option<EncryptedFileWriter>>,
         mixer: &StereoMixer,
         session_state: &Mutex<SessionState>,
-        enable_system: bool,
-        chunk_size: usize,
-        mixing_strategy: &MixingStrategy,
-        channel_buffer_callback: &Option<ChannelBufferCallback>,
-        export_raw_pcm: bool,
-        mic_pcm_writer: &Mutex<Option<std::fs::File>>,
-        system_pcm_writer: &Mutex<Option<std::fs::File>>,
+        ctx: &ProcessingContext,
     ) {
         let mic_samples: Vec<f32>;
         let system_samples: Vec<f32>;
 
-        if enable_system {
+        if ctx.enable_system {
             // System audio drives timing
             let system_frames_available = sys_buf.lock().count() / 2;
-            let frames_to_process = system_frames_available.min(chunk_size);
+            let frames_to_process = system_frames_available.min(ctx.chunk_size);
             if frames_to_process == 0 {
                 return;
             }
@@ -635,7 +637,7 @@ impl<M: CaptureProvider, S: CaptureProvider> CompositeSession<M, S> {
             mic_samples = mic_buf.lock().read(frames_to_process);
         } else {
             // Mic-only mode
-            mic_samples = mic_buf.lock().read(chunk_size);
+            mic_samples = mic_buf.lock().read(ctx.chunk_size);
             system_samples = Vec::new();
             if mic_samples.is_empty() {
                 return;
@@ -643,7 +645,7 @@ impl<M: CaptureProvider, S: CaptureProvider> CompositeSession<M, S> {
         }
 
         // Deliver raw channel buffers before mixing
-        if let Some(ref cb) = channel_buffer_callback {
+        if let Some(ref cb) = ctx.channel_buffer_callback {
             let buffers = ChannelBuffers {
                 mic_samples: mic_samples.clone(),
                 system_samples: system_samples.clone(),
@@ -660,21 +662,21 @@ impl<M: CaptureProvider, S: CaptureProvider> CompositeSession<M, S> {
         }
 
         // Write raw PCM sidecars if enabled
-        if export_raw_pcm {
+        if ctx.export_raw_pcm {
             let mic_pcm = mixer.convert_to_int16_pcm(&mic_samples);
             let system_pcm = mixer.convert_to_int16_pcm(&system_samples);
-            if let Some(ref mut f) = *mic_pcm_writer.lock() {
+            if let Some(ref mut f) = *ctx.mic_pcm_writer.lock() {
                 use std::io::Write;
                 let _ = f.write_all(&mic_pcm);
             }
-            if let Some(ref mut f) = *system_pcm_writer.lock() {
+            if let Some(ref mut f) = *ctx.system_pcm_writer.lock() {
                 use std::io::Write;
                 let _ = f.write_all(&system_pcm);
             }
         }
 
         // Mix according to strategy
-        let stereo = mixer.mix(&mic_samples, &system_samples, mixing_strategy);
+        let stereo = mixer.mix(&mic_samples, &system_samples, &ctx.mixing_strategy);
 
         // Convert to 16-bit PCM
         let pcm = mixer.convert_to_int16_pcm(&stereo);

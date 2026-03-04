@@ -4,6 +4,7 @@ import RecordingControls from "./components/RecordingControls";
 import RecordingList from "./components/RecordingList";
 import SettingsPanel from "./components/SettingsPanel";
 import { useRecording } from "./hooks/useRecording";
+import type { MixingStrategy } from "./lib/tauri";
 
 export default function App() {
   const {
@@ -24,6 +25,8 @@ export default function App() {
   const [enableMic, setEnableMic] = useState(true);
   const [enableSystem, setEnableSystem] = useState(true);
   const [encrypt, setEncrypt] = useState(false);
+  const [mixingStrategy, setMixingStrategy] = useState<MixingStrategy>("blended");
+  const [exportRawPcm, setExportRawPcm] = useState(false);
 
   const handleStart = () => {
     startRecording({
@@ -31,6 +34,8 @@ export default function App() {
       enableMic,
       enableSystem,
       encrypt,
+      mixingStrategy,
+      exportRawPcm,
     });
   };
 
@@ -89,6 +94,10 @@ export default function App() {
             onEnableSystemChange={setEnableSystem}
             encrypt={encrypt}
             onEncryptChange={setEncrypt}
+            mixingStrategy={mixingStrategy}
+            onMixingStrategyChange={setMixingStrategy}
+            exportRawPcm={exportRawPcm}
+            onExportRawPcmChange={setExportRawPcm}
           />
         </TabsContent>
       </Tabs>

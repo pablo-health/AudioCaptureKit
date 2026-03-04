@@ -42,6 +42,7 @@ pub struct CaptureConfiguration {
     /// When true, writes raw PCM sidecar files alongside the WAV:
     /// - `{name}_mic.pcm`    -- mono mic, signed 16-bit LE, no header
     /// - `{name}_system.pcm` -- interleaved stereo system audio, signed 16-bit LE, no header
+    ///
     /// Default: false.
     pub export_raw_pcm: bool,
 }

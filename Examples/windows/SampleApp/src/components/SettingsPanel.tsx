@@ -4,6 +4,7 @@ import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from ".
 import { Switch } from "./ui/switch";
 import { useDevices } from "../hooks/useDevices";
 import { commands, DiagnosticsInfo } from "../lib/tauri";
+import type { MixingStrategy } from "../lib/tauri";
 import type { RecordingState } from "../hooks/useRecording";
 
 interface Props {
@@ -16,6 +17,10 @@ interface Props {
   onEnableSystemChange: (v: boolean) => void;
   encrypt: boolean;
   onEncryptChange: (v: boolean) => void;
+  mixingStrategy: MixingStrategy;
+  onMixingStrategyChange: (v: MixingStrategy) => void;
+  exportRawPcm: boolean;
+  onExportRawPcmChange: (v: boolean) => void;
 }
 
 export default function SettingsPanel({
@@ -28,6 +33,10 @@ export default function SettingsPanel({
   onEnableSystemChange,
   encrypt,
   onEncryptChange,
+  mixingStrategy,
+  onMixingStrategyChange,
+  exportRawPcm,
+  onExportRawPcmChange,
 }: Props) {
   const { captureDevices } = useDevices();
   const isActive = state === "capturing" || state === "paused";
@@ -98,6 +107,49 @@ export default function SettingsPanel({
               <p className="text-muted-foreground">Channels</p>
               <p className="font-medium">Stereo</p>
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Mixing Strategy */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Mixing Strategy</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Select
+            value={mixingStrategy}
+            onValueChange={(v) => onMixingStrategyChange(v as MixingStrategy)}
+            disabled={isActive}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="blended">Blended (default)</SelectItem>
+              <SelectItem value="separated">Separated (diarization)</SelectItem>
+              <SelectItem value="multichannel">Multichannel (reserved)</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            {mixingStrategy === "blended"
+              ? "L = mic + system_L, R = mic + system_R — good for playback"
+              : mixingStrategy === "separated"
+                ? "L = mic only, R = system mono-fold — for speaker-attributed transcription"
+                : "Reserved for future multi-mic configurations"}
+          </p>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium">Export raw PCM sidecars</p>
+              <p className="text-xs text-muted-foreground">
+                Writes unencrypted _mic.pcm and _system.pcm files
+              </p>
+            </div>
+            <Switch
+              checked={exportRawPcm}
+              onCheckedChange={onExportRawPcmChange}
+              disabled={isActive}
+            />
           </div>
         </CardContent>
       </Card>
