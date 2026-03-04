@@ -177,13 +177,18 @@ struct StereoMixerSeparatedStrategyTests {
         #expect(result.isEmpty)
     }
 
-    @Test("mix() with .blended strategy matches legacy mixMicWithStereoSystem")
-    func mix_blended_matchesLegacyBehavior() {
+    @Test("mix() with .blended strategy adds mic to both channels")
+    func mix_blended_addsMicToBothChannels() {
         let mic: [Float] = [0.5, 0.3]
         let system: [Float] = [0.1, 0.2, 0.3, 0.4]
-        let legacy = mixer.mixMicWithStereoSystem(mic: mic, system: system)
-        let newMethod = mixer.mix(mic: mic, system: system, strategy: .blended)
-        #expect(legacy == newMethod)
+        let result = mixer.mix(mic: mic, system: system, strategy: .blended)
+        // frame 0: L = mic[0]+sys[L] = 0.5+0.1 = 0.6, R = mic[0]+sys[R] = 0.5+0.2 = 0.7
+        // frame 1: L = mic[1]+sys[L] = 0.3+0.3 = 0.6, R = mic[1]+sys[R] = 0.3+0.4 = 0.7
+        #expect(result.count == 4)
+        #expect(abs(result[0] - 0.6) < 1e-6)
+        #expect(abs(result[1] - 0.7) < 1e-6)
+        #expect(abs(result[2] - 0.6) < 1e-6)
+        #expect(abs(result[3] - 0.7) < 1e-6)
     }
 
     @Test("mix() with .multichannel falls back to blended behavior")

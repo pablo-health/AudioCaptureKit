@@ -39,8 +39,23 @@ public struct StereoMixer: Sendable {
     ///   - mic: Mono microphone samples.
     ///   - system: Interleaved stereo system audio [L0, R0, L1, R1, ...].
     /// - Returns: Interleaved stereo samples [L0, R0, L1, R1, ...].
-    @available(*, deprecated, renamed: "mix(mic:system:strategy:)")
-    public func mixMicWithStereoSystem(mic: [Float], system: [Float]) -> [Float] {
+    /// Mixes mic and system audio according to the specified strategy.
+    ///
+    /// - Parameters:
+    ///   - mic: Mono microphone samples.
+    ///   - system: Interleaved stereo system audio [L0, R0, L1, R1, ...].
+    ///   - strategy: The mixing strategy to apply.
+    /// - Returns: Interleaved stereo samples [L0, R0, L1, R1, ...].
+    public func mix(mic: [Float], system: [Float], strategy: MixingStrategy) -> [Float] {
+        switch strategy {
+        case .blended, .multichannel:
+            blendMicWithStereoSystem(mic: mic, system: system)
+        case .separated:
+            separateChannels(mic: mic, system: system)
+        }
+    }
+
+    private func blendMicWithStereoSystem(mic: [Float], system: [Float]) -> [Float] {
         let micFrames = mic.count
         let systemFrames = system.count / 2
         let frameCount = max(micFrames, systemFrames)
@@ -55,22 +70,6 @@ public struct StereoMixer: Sendable {
             stereo[i * 2 + 1] = micSample + sysR
         }
         return stereo
-    }
-
-    /// Mixes mic and system audio according to the specified strategy.
-    ///
-    /// - Parameters:
-    ///   - mic: Mono microphone samples.
-    ///   - system: Interleaved stereo system audio [L0, R0, L1, R1, ...].
-    ///   - strategy: The mixing strategy to apply.
-    /// - Returns: Interleaved stereo samples [L0, R0, L1, R1, ...].
-    public func mix(mic: [Float], system: [Float], strategy: MixingStrategy) -> [Float] {
-        switch strategy {
-        case .blended, .multichannel:
-            mixMicWithStereoSystem(mic: mic, system: system)
-        case .separated:
-            separateChannels(mic: mic, system: system)
-        }
     }
 
     /// Produces a separated-channel stereo mix.
