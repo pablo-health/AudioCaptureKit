@@ -230,6 +230,23 @@ pub fn delete_recording(path: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub fn open_recording(path: String) -> Result<(), String> {
+    let target = fs::canonicalize(&path).map_err(|e| e.to_string())?;
+    let allowed_dir = fs::canonicalize(recordings_dir()).map_err(|e| e.to_string())?;
+
+    if !target.starts_with(&allowed_dir) {
+        return Err("Path is outside the recordings directory".into());
+    }
+
+    std::process::Command::new("cmd")
+        .args(["/C", "start", "", &target.to_string_lossy()])
+        .spawn()
+        .map_err(|e| format!("Failed to open file: {}", e))?;
+
+    Ok(())
+}
+
+#[tauri::command]
 pub fn get_diagnostics(state: State<'_, AudioState>) -> Result<DiagnosticsInfo, String> {
     let session_guard = state.session.lock();
     let session = session_guard

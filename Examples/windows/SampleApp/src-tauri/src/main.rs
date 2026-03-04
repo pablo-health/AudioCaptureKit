@@ -21,6 +21,7 @@ fn main() {
             commands::stop_recording,
             commands::get_recordings,
             commands::delete_recording,
+            commands::open_recording,
             commands::get_diagnostics,
         ])
         .run(tauri::generate_context!())

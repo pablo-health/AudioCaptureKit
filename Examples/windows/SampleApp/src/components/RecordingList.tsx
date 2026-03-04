@@ -1,8 +1,8 @@
 import { Play, Trash2, Lock } from "lucide-react";
-import { open } from "@tauri-apps/plugin-shell";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { Card, CardContent } from "./ui/card";
+import { commands } from "../lib/tauri";
 import type { RecordingInfo } from "../lib/tauri";
 
 interface Props {
@@ -51,7 +51,11 @@ export default function RecordingList({ recordings, onDelete }: Props) {
               variant="ghost"
               size="icon"
               className="shrink-0"
-              onClick={() => open(rec.filePath)}
+              onClick={() => {
+                commands.openRecording(rec.filePath).catch((e) => {
+                  alert(`Failed to open: ${e}`);
+                });
+              }}
               title="Play in system player"
             >
               <Play className="h-4 w-4" />

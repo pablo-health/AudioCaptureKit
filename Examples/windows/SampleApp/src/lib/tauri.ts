@@ -61,6 +61,9 @@ export const commands = {
   deleteRecording: (path: string) =>
     invoke<void>("delete_recording", { path }),
 
+  openRecording: (path: string) =>
+    invoke<void>("open_recording", { path }),
+
   getDiagnostics: () =>
     invoke<DiagnosticsInfo>("get_diagnostics"),
 };
