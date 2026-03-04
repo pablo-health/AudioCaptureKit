@@ -40,30 +40,32 @@ extension CompositeCaptureSession {
     }
 
     func processBuffers() async {
-        guard let micBuffer, let systemBuffer, let writer = fileWriter else { return }
+        guard let writer = fileWriter else { return }
 
         let config = configuration
         let chunkSize = Int(config.sampleRate * 0.1) // 100ms frames
+        guard let (micSamples, systemSamples) =
+            await readPendingSamples(config: config, chunkSize: chunkSize) else { return }
 
-        let micSamples: [Float]
-        let systemSamples: [Float]
+        // Deliver raw channel buffers to delegate before mixing
+        let channelBuffers = ChannelBuffers(
+            micSamples: micSamples,
+            systemSamples: systemSamples,
+            sampleRate: stereoMixer.targetSampleRate
+        )
+        let preDelegate = sessionState.withLock { $0.delegate }
+        preDelegate?.captureSession(self, didProduceChannelBuffers: channelBuffers)
 
-        if config.enableSystemCapture {
-            let systemFramesAvailable = await systemBuffer.count / 2
-            let framesToProcess = min(systemFramesAvailable, chunkSize)
-            guard framesToProcess > 0 else { return }
-            systemSamples = await systemBuffer.read(count: framesToProcess * 2)
-            micSamples = await micBuffer.read(count: framesToProcess)
-        } else {
-            micSamples = await micBuffer.read(count: chunkSize)
-            systemSamples = []
-            guard !micSamples.isEmpty else { return }
-        }
-
-        let stereoSamples = stereoMixer.mixMicWithStereoSystem(
-            mic: micSamples, system: systemSamples
+        let stereoSamples = stereoMixer.mix(
+            mic: micSamples,
+            system: systemSamples,
+            strategy: configuration.mixingStrategy
         )
         let pcmData = stereoMixer.convertToInt16PCM(stereoSamples)
+
+        if config.exportRawPCM {
+            writeRawPCMSidecars(micSamples: micSamples, systemSamples: systemSamples)
+        }
 
         sessionState.withLock {
             $0.diagnostics.mixCycles += 1
@@ -77,6 +79,31 @@ extension CompositeCaptureSession {
             if let captureError = error as? CaptureError {
                 delegate?.captureSession(self, didEncounterError: captureError)
             }
+        }
+    }
+
+    private func readPendingSamples(
+        config: CaptureConfiguration,
+        chunkSize: Int
+    ) async -> (mic: [Float], system: [Float])? {
+        guard let micBuf = micBuffer, let sysBuf = systemBuffer else { return nil }
+
+        if config.enableSystemCapture {
+            let frames = await min(sysBuf.count / 2, chunkSize)
+            guard frames > 0 else { return nil }
+            return await (mic: micBuf.read(count: frames), system: sysBuf.read(count: frames * 2))
+        } else {
+            let mic = await micBuf.read(count: chunkSize)
+            return mic.isEmpty ? nil : (mic: mic, system: [])
+        }
+    }
+
+    private func writeRawPCMSidecars(micSamples: [Float], systemSamples: [Float]) {
+        let micPCM = stereoMixer.convertToInt16PCM(micSamples)
+        let systemPCM = stereoMixer.convertToInt16PCM(systemSamples)
+        sessionState.withLock {
+            $0.micPCMFileHandle?.write(micPCM)
+            $0.systemPCMFileHandle?.write(systemPCM)
         }
     }
 
@@ -228,7 +255,15 @@ extension CompositeCaptureSession {
             throw error
         }
 
-        let result = buildRecordingResult(checksum: checksum)
+        let rawPCMURLs: [URL] = sessionState.withLock {
+            $0.micPCMFileHandle?.closeFile()
+            $0.micPCMFileHandle = nil
+            $0.systemPCMFileHandle?.closeFile()
+            $0.systemPCMFileHandle = nil
+            return $0.rawPCMFileURLs
+        }
+
+        let result = buildRecordingResult(checksum: checksum, rawPCMFileURLs: rawPCMURLs)
         setState(.completed(result))
 
         let delegate = sessionState.withLock { $0.delegate }
@@ -236,24 +271,44 @@ extension CompositeCaptureSession {
         return result
     }
 
-    private func buildRecordingResult(checksum: String) -> RecordingResult {
+    private func buildRecordingResult(checksum: String, rawPCMFileURLs: [URL] = []) -> RecordingResult {
         let duration = elapsedDuration()
         let config = configuration
         let fileURL: URL = sessionState.withLock { $0.fileURL! }
+
+        let (tracks, channelLayout): ([AudioTrack], ChannelLayout)
+        switch config.mixingStrategy {
+        case .separated, .multichannel:
+            tracks = [
+                AudioTrack(type: .mic, channel: .left, label: "Mic (Local)"),
+                AudioTrack(type: .system, channel: .right, label: "System (Remote, mono-fold)"),
+            ]
+            channelLayout = .separatedStereo
+        case .blended:
+            tracks = [
+                AudioTrack(type: .mic, channel: .center),
+                AudioTrack(type: .system, channel: .stereo),
+            ]
+            channelLayout = .blended
+        }
 
         let metadata = RecordingMetadata(
             duration: duration,
             fileURL: fileURL,
             checksum: checksum,
             isEncrypted: config.encryptor != nil,
-            tracks: [
-                AudioTrack(type: .mic, channel: .center),
-                AudioTrack(type: .system, channel: .stereo),
-            ],
+            tracks: tracks,
             encryptionAlgorithm: config.encryptor?.algorithm,
-            encryptionKeyId: config.encryptor?.keyMetadata()["keyId"]
+            encryptionKeyId: config.encryptor?.keyMetadata()["keyId"],
+            channelLayout: channelLayout
         )
 
-        return RecordingResult(fileURL: fileURL, duration: duration, metadata: metadata, checksum: checksum)
+        return RecordingResult(
+            fileURL: fileURL,
+            duration: duration,
+            metadata: metadata,
+            checksum: checksum,
+            rawPCMFileURLs: rawPCMFileURLs
+        )
     }
 }

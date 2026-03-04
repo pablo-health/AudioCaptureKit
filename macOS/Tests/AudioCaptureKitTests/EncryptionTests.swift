@@ -13,7 +13,9 @@ struct AES256GCMEncryptor: CaptureEncryptor {
         self.keyId = keyId
     }
 
-    var algorithm: String { "AES-256-GCM" }
+    var algorithm: String {
+        "AES-256-GCM"
+    }
 
     func encrypt(_ data: Data) throws -> Data {
         let sealedBox = try AES.GCM.seal(data, using: key)

@@ -32,6 +32,14 @@ public struct RecordingMetadata: Codable, Sendable, Equatable {
     /// Identifier for the encryption key used, if encrypted.
     public let encryptionKeyId: String?
 
+    /// The WAV channel layout used for this recording.
+    public let channelLayout: ChannelLayout
+
+    private enum CodingKeys: String, CodingKey {
+        case id, duration, fileURL, checksum, isEncrypted, createdAt, tracks,
+             encryptionAlgorithm, encryptionKeyId, channelLayout
+    }
+
     public init(
         id: UUID = UUID(),
         duration: TimeInterval,
@@ -41,7 +49,8 @@ public struct RecordingMetadata: Codable, Sendable, Equatable {
         createdAt: Date = Date(),
         tracks: [AudioTrack],
         encryptionAlgorithm: String? = nil,
-        encryptionKeyId: String? = nil
+        encryptionKeyId: String? = nil,
+        channelLayout: ChannelLayout = .blended
     ) {
         self.id = id
         self.duration = duration
@@ -52,5 +61,20 @@ public struct RecordingMetadata: Codable, Sendable, Equatable {
         self.tracks = tracks
         self.encryptionAlgorithm = encryptionAlgorithm
         self.encryptionKeyId = encryptionKeyId
+        self.channelLayout = channelLayout
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        duration = try container.decode(TimeInterval.self, forKey: .duration)
+        fileURL = try container.decode(URL.self, forKey: .fileURL)
+        checksum = try container.decode(String.self, forKey: .checksum)
+        isEncrypted = try container.decode(Bool.self, forKey: .isEncrypted)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        tracks = try container.decode([AudioTrack].self, forKey: .tracks)
+        encryptionAlgorithm = try container.decodeIfPresent(String.self, forKey: .encryptionAlgorithm)
+        encryptionKeyId = try container.decodeIfPresent(String.self, forKey: .encryptionKeyId)
+        channelLayout = (try? container.decodeIfPresent(ChannelLayout.self, forKey: .channelLayout)) ?? .blended
     }
 }

@@ -128,4 +128,65 @@ struct RecordingMetadataTests {
         #expect(json?["encryptionAlgorithm"] as? String == "AES-256-GCM")
         #expect(json?["encryptionKeyId"] as? String == "key-1")
     }
+
+    @Test("channelLayout separatedStereo serializes correctly")
+    func channelLayout_separatedStereo_serializesCorrectly() throws {
+        let metadata = RecordingMetadata(
+            duration: 30,
+            fileURL: URL(fileURLWithPath: "/tmp/test.wav"),
+            checksum: "abc",
+            isEncrypted: false,
+            tracks: [],
+            channelLayout: .separatedStereo
+        )
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let data = try encoder.encode(metadata)
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        #expect(json?["channelLayout"] as? String == "separatedStereo")
+    }
+
+    @Test("Missing channelLayout in legacy JSON defaults to blended")
+    func channelLayout_missingFromJSON_defaultsToBlended() throws {
+        let json = Data("""
+        {
+            "id": "00000000-0000-0000-0000-000000000000",
+            "duration": 60.0,
+            "fileURL": "file:///tmp/test.wav",
+            "checksum": "abc",
+            "isEncrypted": false,
+            "createdAt": "2024-01-01T00:00:00Z",
+            "tracks": []
+        }
+        """.utf8)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let metadata = try decoder.decode(RecordingMetadata.self, from: json)
+        #expect(metadata.channelLayout == .blended)
+    }
+
+    @Test("AudioTrack label is included in JSON when present")
+    func audioTrack_labelIncludedInJSON_whenPresent() throws {
+        let track = AudioTrack(type: .mic, channel: .left, label: "Mic (Local)")
+        let data = try JSONEncoder().encode(track)
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        #expect(json?["label"] as? String == "Mic (Local)")
+    }
+
+    @Test("rawPCMFileURLs is empty by default in RecordingResult")
+    func rawPCMFileURLs_emptyByDefault() {
+        let result = RecordingResult(
+            fileURL: URL(fileURLWithPath: "/tmp/test.wav"),
+            duration: 30,
+            metadata: RecordingMetadata(
+                duration: 30,
+                fileURL: URL(fileURLWithPath: "/tmp/test.wav"),
+                checksum: "abc",
+                isEncrypted: false,
+                tracks: []
+            ),
+            checksum: "abc"
+        )
+        #expect(result.rawPCMFileURLs.isEmpty)
+    }
 }

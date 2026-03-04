@@ -14,10 +14,21 @@ public struct RecordingResult: Sendable, Equatable {
     /// SHA-256 checksum of the recorded file.
     public let checksum: String
 
-    public init(fileURL: URL, duration: TimeInterval, metadata: RecordingMetadata, checksum: String) {
+    /// URLs of raw PCM sidecar files. [0] = mic.pcm (mono), [1] = system.pcm (stereo interleaved).
+    /// Empty unless exportRawPCM was enabled in configuration.
+    public let rawPCMFileURLs: [URL]
+
+    public init(
+        fileURL: URL,
+        duration: TimeInterval,
+        metadata: RecordingMetadata,
+        checksum: String,
+        rawPCMFileURLs: [URL] = []
+    ) {
         self.fileURL = fileURL
         self.duration = duration
         self.metadata = metadata
         self.checksum = checksum
+        self.rawPCMFileURLs = rawPCMFileURLs
     }
 }

@@ -106,3 +106,107 @@ struct StereoMixerTests {
         #expect(output.isEmpty)
     }
 }
+
+@Suite("StereoMixer — separateChannels and mix() dispatch")
+struct StereoMixerSeparatedStrategyTests {
+
+    let mixer = StereoMixer(targetSampleRate: 48000)
+
+    @Test("Left channel contains only mic signal")
+    func separateChannels_leftIsMicOnly() {
+        let mic: [Float] = [0.5, 0.3]
+        let system: [Float] = [0.1, 0.2, 0.1, 0.2]
+        let result = mixer.mix(mic: mic, system: system, strategy: .separated)
+        #expect(abs(result[0] - 0.5) < 1e-6) // frame 0, L
+        #expect(abs(result[2] - 0.3) < 1e-6) // frame 1, L
+    }
+
+    @Test("Right channel is system mono-fold — preserves both L and R channels")
+    func separateChannels_rightIsSystemMonoFold() {
+        let mic: [Float] = [0.0, 0.0]
+        let system: [Float] = [0.8, 0.4, 0.8, 0.4]
+        let result = mixer.mix(mic: mic, system: system, strategy: .separated)
+        // Right = (0.8 + 0.4) / 2 = 0.6, NOT 0.8 (L only)
+        #expect(abs(result[1] - 0.6) < 1e-6) // frame 0, R
+        #expect(abs(result[3] - 0.6) < 1e-6) // frame 1, R
+    }
+
+    @Test("Left channel is zero when mic is silent")
+    func separateChannels_silentMic_leftIsZero() {
+        let mic: [Float] = [0.0, 0.0]
+        let system: [Float] = [0.5, 0.5, 0.5, 0.5]
+        let result = mixer.mix(mic: mic, system: system, strategy: .separated)
+        #expect(abs(result[0]) < 1e-6)
+        #expect(abs(result[2]) < 1e-6)
+    }
+
+    @Test("Right channel is zero when system is silent")
+    func separateChannels_silentSystem_rightIsZero() {
+        let mic: [Float] = [0.5, 0.3]
+        let system: [Float] = [0.0, 0.0, 0.0, 0.0]
+        let result = mixer.mix(mic: mic, system: system, strategy: .separated)
+        #expect(abs(result[1]) < 1e-6)
+        #expect(abs(result[3]) < 1e-6)
+    }
+
+    @Test("Mic longer than system — right channel zero-padded")
+    func separateChannels_micLonger_rightZeroPadded() {
+        let mic: [Float] = [0.5, 0.3, 0.1]
+        let system: [Float] = [0.2, 0.2] // 1 stereo frame
+        let result = mixer.mix(mic: mic, system: system, strategy: .separated)
+        #expect(result.count == 6) // 3 frames
+        #expect(abs(result[4] - 0.1) < 1e-6) // L = mic[2]
+        #expect(abs(result[5]) < 1e-6) // R = 0 (system exhausted)
+    }
+
+    @Test("System longer than mic — left channel zero-padded")
+    func separateChannels_systemLonger_leftZeroPadded() {
+        let mic: [Float] = [0.5] // 1 frame
+        let system: [Float] = [0.2, 0.4, 0.6, 0.8, 0.2, 0.4] // 3 stereo frames
+        let result = mixer.mix(mic: mic, system: system, strategy: .separated)
+        #expect(result.count == 6) // 3 frames
+        // frame 1 L = mic[1] = 0 (padded)
+        #expect(abs(result[2]) < 1e-6)
+        // frame 1 R = (0.6 + 0.8) / 2 = 0.7
+        #expect(abs(result[3] - 0.7) < 1e-6)
+    }
+
+    @Test("Both inputs empty returns empty array")
+    func separateChannels_bothEmpty_returnsEmpty() {
+        let result = mixer.mix(mic: [], system: [], strategy: .separated)
+        #expect(result.isEmpty)
+    }
+
+    @Test("mix() with .blended strategy adds mic to both channels")
+    func mix_blended_addsMicToBothChannels() {
+        let mic: [Float] = [0.5, 0.3]
+        let system: [Float] = [0.1, 0.2, 0.3, 0.4]
+        let result = mixer.mix(mic: mic, system: system, strategy: .blended)
+        // frame 0: L = mic[0]+sys[L] = 0.5+0.1 = 0.6, R = mic[0]+sys[R] = 0.5+0.2 = 0.7
+        // frame 1: L = mic[1]+sys[L] = 0.3+0.3 = 0.6, R = mic[1]+sys[R] = 0.3+0.4 = 0.7
+        #expect(result.count == 4)
+        #expect(abs(result[0] - 0.6) < 1e-6)
+        #expect(abs(result[1] - 0.7) < 1e-6)
+        #expect(abs(result[2] - 0.6) < 1e-6)
+        #expect(abs(result[3] - 0.7) < 1e-6)
+    }
+
+    @Test("mix() with .multichannel falls back to blended behavior")
+    func mix_multichannel_fallsBackToBlended() {
+        let mic: [Float] = [0.5, 0.3]
+        let system: [Float] = [0.1, 0.2, 0.3, 0.4]
+        let blended = mixer.mix(mic: mic, system: system, strategy: .blended)
+        let multichannel = mixer.mix(mic: mic, system: system, strategy: .multichannel)
+        #expect(blended == multichannel)
+    }
+
+    @Test("mix() with .separated produces no mic blending into right channel")
+    func mix_separated_noMicInRightChannel() {
+        // With silent system audio, right channel should always be zero
+        let mic: [Float] = [0.5, 0.3]
+        let system: [Float] = [0.0, 0.0, 0.0, 0.0]
+        let result = mixer.mix(mic: mic, system: system, strategy: .separated)
+        #expect(abs(result[1]) < 1e-6) // right channel, frame 0
+        #expect(abs(result[3]) < 1e-6) // right channel, frame 1
+    }
+}

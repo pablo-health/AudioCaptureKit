@@ -32,10 +32,72 @@ public struct AudioTrack: Sendable, Codable, Equatable {
     /// The stereo channel this track is assigned to.
     public let channel: AudioChannel
 
-    public init(type: AudioTrackType, channel: AudioChannel) {
+    /// Optional human-readable label for this track (e.g. "Mic (Local)").
+    public let label: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case type, channel, label
+    }
+
+    public init(type: AudioTrackType, channel: AudioChannel, label: String? = nil) {
         self.type = type
         self.channel = channel
+        self.label = label
     }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(type, forKey: .type)
+        try container.encode(channel, forKey: .channel)
+        try container.encodeIfPresent(label, forKey: .label)
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        type = try container.decode(AudioTrackType.self, forKey: .type)
+        channel = try container.decode(AudioChannel.self, forKey: .channel)
+        label = try container.decodeIfPresent(String.self, forKey: .label)
+    }
+}
+
+/// Raw per-channel audio samples from one processing cycle (~100 ms window).
+///
+/// Delivered via ``AudioCaptureDelegate/captureSession(_:didProduceChannelBuffers:)``
+/// before mixing and file writing. All samples are Float32, normalized to [-1.0, 1.0],
+/// at the session's configured sample rate.
+///
+/// ``systemSamples`` is full interleaved stereo [L0, R0, L1, R1, ...]. The library
+/// does not fold, downsample, or otherwise modify system audio.
+public struct ChannelBuffers: Sendable {
+    /// Mono microphone samples. Empty when mic capture is disabled.
+    public let micSamples: [Float]
+
+    /// Interleaved stereo system audio [L0, R0, L1, R1, ...].
+    /// Empty when system capture is disabled.
+    public let systemSamples: [Float]
+
+    /// Sample rate of both arrays, in Hz.
+    public let sampleRate: Double
+
+    /// Wall-clock timestamp at the start of this buffer window.
+    public let timestamp: Date
+
+    public init(micSamples: [Float], systemSamples: [Float], sampleRate: Double, timestamp: Date = Date()) {
+        self.micSamples = micSamples
+        self.systemSamples = systemSamples
+        self.sampleRate = sampleRate
+        self.timestamp = timestamp
+    }
+}
+
+/// Records the actual WAV channel layout for downstream decoders.
+public enum ChannelLayout: String, Sendable, Codable {
+    /// Mic mixed into both channels (legacy/blended strategy).
+    case blended
+    /// Ch1 (Left) = mic only, Ch2 (Right) = system audio mono-folded (L+R)/2.
+    case separatedStereo
+    /// Single mono channel.
+    case mono
 }
 
 /// Describes the transport type of an audio device.

@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use super::audio_models::{AudioChannel, AudioTrack, AudioTrackType};
+use super::audio_models::{AudioChannel, AudioTrack, AudioTrackType, ChannelLayout};
 
 /// Result returned when a capture session completes successfully.
 #[derive(Debug, Clone, PartialEq)]
@@ -11,6 +11,9 @@ pub struct RecordingResult {
     pub duration_secs: f64,
     pub metadata: RecordingMetadata,
     pub checksum: String,
+    /// Paths of raw PCM sidecar files. [0] = mic.pcm (mono), [1] = system.pcm (stereo).
+    /// Empty unless export_raw_pcm was enabled.
+    pub raw_pcm_file_paths: Vec<PathBuf>,
 }
 
 /// Metadata stored alongside (or embedded in) a recording.
@@ -27,6 +30,7 @@ pub struct RecordingMetadata {
     pub tracks: Vec<AudioTrack>,
     pub encryption_algorithm: Option<String>,
     pub encryption_key_id: Option<String>,
+    pub channel_layout: ChannelLayout,
 }
 
 impl RecordingMetadata {
@@ -47,17 +51,42 @@ impl RecordingMetadata {
             is_encrypted,
             created_at: chrono::Utc::now().to_rfc3339(),
             tracks: vec![
-                AudioTrack {
-                    track_type: AudioTrackType::Mic,
-                    channel: AudioChannel::Center,
-                },
-                AudioTrack {
-                    track_type: AudioTrackType::System,
-                    channel: AudioChannel::Stereo,
-                },
+                AudioTrack::new(AudioTrackType::Mic, AudioChannel::Center),
+                AudioTrack::new(AudioTrackType::System, AudioChannel::Stereo),
             ],
             encryption_algorithm,
             encryption_key_id,
+            channel_layout: ChannelLayout::Blended,
+        }
+    }
+
+    /// Creates metadata for a separated-channel mic+system recording.
+    pub fn new_separated(
+        duration_secs: f64,
+        file_path: &str,
+        checksum: &str,
+        is_encrypted: bool,
+        encryption_algorithm: Option<String>,
+        encryption_key_id: Option<String>,
+    ) -> Self {
+        Self {
+            id: uuid::Uuid::new_v4().to_string(),
+            duration_secs,
+            file_path: file_path.to_string(),
+            checksum: checksum.to_string(),
+            is_encrypted,
+            created_at: chrono::Utc::now().to_rfc3339(),
+            tracks: vec![
+                AudioTrack::with_label(AudioTrackType::Mic, AudioChannel::Left, "Mic (Local)"),
+                AudioTrack::with_label(
+                    AudioTrackType::System,
+                    AudioChannel::Right,
+                    "System (Remote, mono-fold)",
+                ),
+            ],
+            encryption_algorithm,
+            encryption_key_id,
+            channel_layout: ChannelLayout::SeparatedStereo,
         }
     }
 }

@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, State};
 
-use audio_capture_core::{CaptureConfiguration, CompositeSession};
+use audio_capture_core::{CaptureConfiguration, CompositeSession, MixingStrategy};
 use audio_capture_windows::{DeviceEnumerator, WasapiLoopbackCapture, WasapiMicCapture};
 
 use crate::audio_state::{AudioState, DeviceInfo, DiagnosticsInfo, TauriDelegate};
@@ -18,6 +18,9 @@ pub struct RecordingConfig {
     pub enable_mic: bool,
     pub enable_system: bool,
     pub encrypt: bool,
+    /// "blended" | "separated" | "multichannel"
+    pub mixing_strategy: Option<String>,
+    pub export_raw_pcm: bool,
 }
 
 /// Info about a saved recording, returned to the frontend.
@@ -89,6 +92,12 @@ pub fn start_recording(
         None
     };
 
+    let mixing_strategy = match config.mixing_strategy.as_deref() {
+        Some("separated") => MixingStrategy::Separated,
+        Some("multichannel") => MixingStrategy::Multichannel,
+        _ => MixingStrategy::Blended,
+    };
+
     let capture_config = CaptureConfiguration {
         sample_rate: 48000.0,
         bit_depth: 16,
@@ -99,6 +108,8 @@ pub fn start_recording(
         mic_device_id: config.mic_device_id,
         enable_mic_capture: config.enable_mic,
         enable_system_capture: config.enable_system,
+        mixing_strategy,
+        export_raw_pcm: config.export_raw_pcm,
     };
 
     session.configure(capture_config).map_err(|e| e.to_string())?;
@@ -214,6 +225,23 @@ pub fn delete_recording(path: String) -> Result<(), String> {
     // Also delete metadata sidecar if it exists
     let meta_path = format!("{}.metadata.json", path);
     let _ = fs::remove_file(&meta_path);
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn open_recording(path: String) -> Result<(), String> {
+    let target = fs::canonicalize(&path).map_err(|e| e.to_string())?;
+    let allowed_dir = fs::canonicalize(recordings_dir()).map_err(|e| e.to_string())?;
+
+    if !target.starts_with(&allowed_dir) {
+        return Err("Path is outside the recordings directory".into());
+    }
+
+    std::process::Command::new("cmd")
+        .args(["/C", "start", "", &target.to_string_lossy()])
+        .spawn()
+        .map_err(|e| format!("Failed to open file: {}", e))?;
 
     Ok(())
 }
