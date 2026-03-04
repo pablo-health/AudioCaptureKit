@@ -148,7 +148,7 @@ struct RecordingMetadataTests {
 
     @Test("Missing channelLayout in legacy JSON defaults to blended")
     func channelLayout_missingFromJSON_defaultsToBlended() throws {
-        let json = """
+        let json = Data("""
         {
             "id": "00000000-0000-0000-0000-000000000000",
             "duration": 60.0,
@@ -158,7 +158,7 @@ struct RecordingMetadataTests {
             "createdAt": "2024-01-01T00:00:00Z",
             "tracks": []
         }
-        """.data(using: .utf8)!
+        """.utf8)
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         let metadata = try decoder.decode(RecordingMetadata.self, from: json)

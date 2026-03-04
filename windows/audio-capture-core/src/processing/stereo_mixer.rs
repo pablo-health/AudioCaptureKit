@@ -160,9 +160,7 @@ impl StereoMixer {
     /// for backward compatibility but prefer this method.
     pub fn mix(&self, mic: &[f32], system: &[f32], strategy: &MixingStrategy) -> Vec<f32> {
         match strategy {
-            MixingStrategy::Blended | MixingStrategy::Multichannel => {
-                self.mix_mic_with_stereo_system(mic, system)
-            }
+            MixingStrategy::Blended | MixingStrategy::Multichannel => self.mix_mic_with_stereo_system(mic, system),
             MixingStrategy::Separated => self.separate_channels(mic, system),
         }
     }
@@ -185,7 +183,11 @@ impl StereoMixer {
         for i in 0..frame_count {
             stereo[i * 2] = if i < mic_frames { mic[i] } else { 0.0 }; // Left = mic
             let sys_l = if i * 2 < system.len() { system[i * 2] } else { 0.0 };
-            let sys_r = if i * 2 + 1 < system.len() { system[i * 2 + 1] } else { 0.0 };
+            let sys_r = if i * 2 + 1 < system.len() {
+                system[i * 2 + 1]
+            } else {
+                0.0
+            };
             stereo[i * 2 + 1] = (sys_l + sys_r) / 2.0; // Right = mono-fold
         }
         stereo
@@ -398,8 +400,8 @@ mod tests {
         let mic = [0.5f32, 0.3, 0.1];
         let system = [0.2f32, 0.2]; // 1 stereo frame
         let result = mixer.separate_channels(&mic, &system);
-        assert_eq!(result.len(), 6); // 3 frames
         // frame 2: L = mic[2] = 0.1, R = 0 (system exhausted)
+        assert_eq!(result.len(), 6); // 3 frames
         assert!((result[4] - 0.1).abs() < 1e-6);
         assert!(result[5].abs() < 1e-6);
     }

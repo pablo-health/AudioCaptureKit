@@ -40,25 +40,11 @@ extension CompositeCaptureSession {
     }
 
     func processBuffers() async {
-        guard let micBuffer, let systemBuffer, let writer = fileWriter else { return }
+        guard let writer = fileWriter else { return }
 
         let config = configuration
         let chunkSize = Int(config.sampleRate * 0.1) // 100ms frames
-
-        let micSamples: [Float]
-        let systemSamples: [Float]
-
-        if config.enableSystemCapture {
-            let systemFramesAvailable = await systemBuffer.count / 2
-            let framesToProcess = min(systemFramesAvailable, chunkSize)
-            guard framesToProcess > 0 else { return }
-            systemSamples = await systemBuffer.read(count: framesToProcess * 2)
-            micSamples = await micBuffer.read(count: framesToProcess)
-        } else {
-            micSamples = await micBuffer.read(count: chunkSize)
-            systemSamples = []
-            guard !micSamples.isEmpty else { return }
-        }
+        guard let (micSamples, systemSamples) = await readPendingSamples(config: config, chunkSize: chunkSize) else { return }
 
         // Deliver raw channel buffers to delegate before mixing
         let channelBuffers = ChannelBuffers(
@@ -77,12 +63,7 @@ extension CompositeCaptureSession {
         let pcmData = stereoMixer.convertToInt16PCM(stereoSamples)
 
         if config.exportRawPCM {
-            let micPCM = stereoMixer.convertToInt16PCM(micSamples)
-            let systemPCM = stereoMixer.convertToInt16PCM(systemSamples)
-            sessionState.withLock {
-                $0.micPCMFileHandle?.write(micPCM)
-                $0.systemPCMFileHandle?.write(systemPCM)
-            }
+            writeRawPCMSidecars(micSamples: micSamples, systemSamples: systemSamples)
         }
 
         sessionState.withLock {
@@ -97,6 +78,31 @@ extension CompositeCaptureSession {
             if let captureError = error as? CaptureError {
                 delegate?.captureSession(self, didEncounterError: captureError)
             }
+        }
+    }
+
+    private func readPendingSamples(
+        config: CaptureConfiguration,
+        chunkSize: Int
+    ) async -> (mic: [Float], system: [Float])? {
+        guard let micBuf = micBuffer, let sysBuf = systemBuffer else { return nil }
+
+        if config.enableSystemCapture {
+            let frames = min(await sysBuf.count / 2, chunkSize)
+            guard frames > 0 else { return nil }
+            return (mic: await micBuf.read(count: frames), system: await sysBuf.read(count: frames * 2))
+        } else {
+            let mic = await micBuf.read(count: chunkSize)
+            return mic.isEmpty ? nil : (mic: mic, system: [])
+        }
+    }
+
+    private func writeRawPCMSidecars(micSamples: [Float], systemSamples: [Float]) {
+        let micPCM = stereoMixer.convertToInt16PCM(micSamples)
+        let systemPCM = stereoMixer.convertToInt16PCM(systemSamples)
+        sessionState.withLock {
+            $0.micPCMFileHandle?.write(micPCM)
+            $0.systemPCMFileHandle?.write(systemPCM)
         }
     }
 

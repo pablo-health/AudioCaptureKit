@@ -16,7 +16,7 @@ struct ChannelLayoutTests {
     @Test("Missing channelLayout in JSON defaults to blended (backward compat)")
     func missingChannelLayout_defaultsToBlended() throws {
         // Build a RecordingMetadata JSON without "channelLayout" key
-        let json = """
+        let json = Data("""
         {
             "id": "00000000-0000-0000-0000-000000000000",
             "duration": 60.0,
@@ -26,7 +26,7 @@ struct ChannelLayoutTests {
             "createdAt": "2024-01-01T00:00:00Z",
             "tracks": []
         }
-        """.data(using: .utf8)!
+        """.utf8)
 
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
@@ -61,6 +61,6 @@ struct ChannelLayoutTests {
     func channelBuffers_systemSamples_isFullStereo() {
         let system: [Float] = [0.1, 0.2, 0.3, 0.4] // 2 stereo frames
         let buffers = ChannelBuffers(micSamples: [], systemSamples: system, sampleRate: 48000)
-        #expect(buffers.systemSamples.count % 2 == 0)
+        #expect(buffers.systemSamples.count.isMultiple(of: 2))
     }
 }

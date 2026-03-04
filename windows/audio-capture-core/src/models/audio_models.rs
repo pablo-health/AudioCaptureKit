@@ -33,11 +33,19 @@ pub struct AudioTrack {
 
 impl AudioTrack {
     pub fn new(track_type: AudioTrackType, channel: AudioChannel) -> Self {
-        Self { track_type, channel, label: None }
+        Self {
+            track_type,
+            channel,
+            label: None,
+        }
     }
 
     pub fn with_label(track_type: AudioTrackType, channel: AudioChannel, label: impl Into<String>) -> Self {
-        Self { track_type, channel, label: Some(label.into()) }
+        Self {
+            track_type,
+            channel,
+            label: Some(label.into()),
+        }
     }
 }
 

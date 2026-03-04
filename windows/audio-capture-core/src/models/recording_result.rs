@@ -78,7 +78,11 @@ impl RecordingMetadata {
             created_at: chrono::Utc::now().to_rfc3339(),
             tracks: vec![
                 AudioTrack::with_label(AudioTrackType::Mic, AudioChannel::Left, "Mic (Local)"),
-                AudioTrack::with_label(AudioTrackType::System, AudioChannel::Right, "System (Remote, mono-fold)"),
+                AudioTrack::with_label(
+                    AudioTrackType::System,
+                    AudioChannel::Right,
+                    "System (Remote, mono-fold)",
+                ),
             ],
             encryption_algorithm,
             encryption_key_id,
