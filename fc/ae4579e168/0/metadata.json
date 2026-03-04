@@ -1,0 +1,33 @@
+{
+  "cli_version": "0.4.7",
+  "checkpoint_id": "fcae4579e168",
+  "session_id": "fba17e99-7185-4d9b-be0f-599897e15202",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-04T00:45:20.759932Z",
+  "branch": "feature/channel-diarization-support",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "docs/API.md",
+    "docs/DIARIZATION.md",
+    "macOS/Sources/AudioCaptureKit/Models/MixingStrategy.swift",
+    "windows/audio-capture-core/src/models/mixing_strategy.rs"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "8f5d7c4d4341",
+  "token_usage": {
+    "input_tokens": 22,
+    "cache_creation_tokens": 72820,
+    "cache_read_tokens": 1351575,
+    "output_tokens": 24548,
+    "api_call_count": 20
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-04T00:45:20.596413Z",
+    "agent_lines": 334,
+    "human_added": 959,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 1293,
+    "agent_percentage": 25.831399845320956
+  }
+}

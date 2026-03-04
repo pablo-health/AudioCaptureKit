@@ -1,0 +1,29 @@
+{
+  "cli_version": "0.4.7",
+  "checkpoint_id": "fcae4579e168",
+  "strategy": "manual-commit",
+  "branch": "feature/channel-diarization-support",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "docs/API.md",
+    "docs/DIARIZATION.md",
+    "macOS/Sources/AudioCaptureKit/Models/MixingStrategy.swift",
+    "windows/audio-capture-core/src/models/mixing_strategy.rs"
+  ],
+  "sessions": [
+    {
+      "metadata": "/fc/ae4579e168/0/metadata.json",
+      "transcript": "/fc/ae4579e168/0/full.jsonl",
+      "context": "/fc/ae4579e168/0/context.md",
+      "content_hash": "/fc/ae4579e168/0/content_hash.txt",
+      "prompt": "/fc/ae4579e168/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 22,
+    "cache_creation_tokens": 72820,
+    "cache_read_tokens": 1351575,
+    "output_tokens": 24548,
+    "api_call_count": 20
+  }
+}

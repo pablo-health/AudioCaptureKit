@@ -1,0 +1,582 @@
+Implement the following plan:
+
+# Channel-Based Diarization Support
+
+## Context
+
+AudioCaptureKit captures mic (local speaker) and system audio (remote participants) but currently **mixes the mic into both stereo channels** (`Left = mic + system_L`, `Right = mic + system_R`). This makes downstream speaker diarization difficult: to run independent processing per speaker, you need access to clean channel-separated audio.
+
+This feature adds:
+1. A new delegate callback exposing **raw, full-quality per-channel buffers** (mic mono + system stereo) before mixing — callers decide how to process them
+2. A configurable `MixingStrategy` so callers can choose the WAV channel layout
+3. Explicit channel/layout metadata in `RecordingResult`
+4. Optional raw PCM sidecar files (mic mono + system stereo) for use with external tools
+
+**Design principle**: AudioCaptureKit provides maximum-quality raw data. It is the caller's responsibility to fold, downsample, or otherwise optimize for a specific use case (e.g. ASR). The library never degrades audio quality on behalf of the caller.
+
+The `MixingStrategy` change affects the output WAV layout (the only breaking change, gated behind configuration). All other changes are purely additive. Both macOS Swift and Windows Rust must stay in sync.
+
+---
+
+## Step 0: Create Feature Branch
+
+```bash
+git checkout main
+git pull
+git checkout -b feature/channel-diarization-support
+```
+
+---
+
+## Step 1: Create Design Doc
+
+**New file:** `docs/DIARIZATION.md`
+
+Sections:
+- **Overview**: how the library enables speaker diarization without ML — channel identity is known at capture time
+- **Channel strategy**: what each channel contains under each `MixingStrategy`
+- **Diarization scenarios**: telehealth (trivial — process Ch1 and Ch2 independently), couples counseling (2-speaker diarization on system channel only), in-person (full diarization needed)
+- **`didProduceChannelBuffers` callback**: code example; note that `systemSamples` is full stereo — callers fold to mono themselves if needed for ASR
+- **Raw PCM sidecar files**: format (signed 16-bit LE, `_mic.pcm` mono, `_system.pcm` interleaved stereo), usage with external tools
+- **`MixingStrategy` reference**: table of strategies and their WAV channel layouts
+- **Future**: 3–4 channel multi-mic (reserved, not yet wired in the mixer)
+
+**Update:** `docs/API.md` — add new types, config fields, result fields, delegate method, link to DIARIZATION.md.
+
+---
+
+## Step 2: `MixingStrategy` — Configurable WAV Channel Layout
+
+### New enum
+
+**Swift** — new file `macOS/Sources/AudioCaptureKit/Models/MixingStrategy.swift`:
+
+```swift
+/// Controls how microphone and system audio are combined into the output WAV file.
+///
+/// Choose the strategy that best fits your downstream use case. The library
+/// always captures at full quality; this setting only affects how samples are
+/// written to disk. Raw per-channel samples (before mixing) are always available
+/// via ``AudioCaptureDelegate/captureSession(_:didProduceChannelBuffers:)``.
+public enum MixingStrategy: Sendable, Codable {
+    /// Mic is mixed into both stereo channels alongside system audio.
+    /// - Left:  mic + system_L
+    /// - Right: mic + system_R
+    /// This is the default and matches the original AudioCaptureKit behavior.
+    case blended
+
+    /// Mic and system audio occupy separate stereo channels with no blending
+    /// of mic into system or vice versa.
+    /// - Left (Ch 1):  mic only (mono mic signal)
+    /// - Right (Ch 2): system audio, mono-folded as (system_L + system_R) / 2
+    ///
+    /// The mono-fold on the right channel preserves audio from both the left
+    /// and right system channels — no content is discarded. If you need full
+    /// stereo system audio in the WAV file, use a 3-channel configuration
+    /// (channels: 3, future support).
+    case separated
+
+    /// Reserved for future 3-channel multi-mic configurations.
+    /// Currently behaves identically to ``separated``.
+    case multichannel
+}
+```
+
+**Rust** — new file `windows/audio-capture-core/src/models/mixing_strategy.rs`:
+```rust
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum MixingStrategy {
+    #[default]
+    Blended,
+    Separated,
+    Multichannel,
+}
+```
+
+### Add to `CaptureConfiguration`
+
+**Swift:**
+```swift
+/// Determines how mic and system audio are combined into the output WAV.
+/// Default is ``MixingStrategy/blended`` to preserve existing behavior.
+public let mixingStrategy: MixingStrategy  // init default = .blended
+```
+
+**Rust:**
+```rust
+pub mixing_strategy: MixingStrategy,  // Default = Blended
+```
+
+---
+
+## Step 3: Update `StereoMixer`
+
+### macOS: `macOS/Sources/AudioCaptureKit/Processing/StereoMixer.swift`
+
+**Deprecate** (do not delete) `mixMicWithStereoSystem`:
+```swift
+@available(*, deprecated, renamed: "mix(mic:system:strategy:)")
+public func mixMicWithStereoSystem(...) -> [Float]
+```
+
+**Add** a unified `mix(mic:system:strategy:) -> [Float]` method:
+```swift
+/// Mixes mic and system audio according to the specified strategy.
+/// - Parameters:
+///   - mic: Mono mic samples, resampled to target rate.
+///   - system: Interleaved stereo system samples [L0, R0, L1, R1, …].
+///   - strategy: How to combine the sources.
+public func mix(mic: [Float], system: [Float], strategy: MixingStrategy) -> [Float] {
+    switch strategy {
+    case .blended, .multichannel:
+        return mixMicWithStereoSystem(mic: mic, system: system)
+    case .separated:
+        return separateChannels(mic: mic, system: system)
+    }
+}
+```
+
+**Add** `separateChannels(mic:system:) -> [Float]` (used by `.separated` strategy):
+- Left  = mic[i] (zero-padded when shorter)
+- Right = (system[2*i] + system[2*i+1]) / 2  — mono-fold preserving both L and R channels
+- Frame count = max(mic.count, system.count/2)
+
+This is the correct way to fit stereo system audio into a single channel without discarding half the content (e.g., audio panned right would be lost if only system_L were used).
+
+No `foldToMono` is exposed as a standalone public API. Callers who need system mono from `ChannelBuffers.systemSamples` can compute `(system[2i] + system[2i+1]) / 2` themselves.
+
+### Windows: `windows/audio-capture-core/src/processing/stereo_mixer.rs`
+
+Mirror the same changes: deprecate `mix_mic_with_stereo_system`, add `mix()` dispatching on `MixingStrategy`, add `separate_channels`.
+
+### New unit tests
+
+**Swift** — add to `macOS/Tests/AudioCaptureKitTests/StereoMixerTests.swift`:
+```swift
+@Suite("StereoMixer — separateChannels")
+struct StereoMixerSeparatedStrategyTests {
+
+    @Test("Left channel contains only mic signal")
+    func separateChannels_leftIsMicOnly() {
+        // mic=[0.5, 0.3], system=[0.1, 0.2, 0.1, 0.2]
+        // assert output[0]==0.5, output[2]==0.3
+    }
+
+    @Test("Right channel is system mono-fold — preserves both L and R channels")
+    func separateChannels_rightIsSystemMonoFold() {
+        // mic=[0.0, 0.0], system=[0.8, 0.4, 0.8, 0.4]
+        // assert output[1]==0.6 (0.8+0.4)/2, NOT 0.8 (L only), NOT 0.4 (R only)
+    }
+
+    @Test("Left channel is zero when mic is silent")
+    func separateChannels_silentMic_leftIsZero() { ... }
+
+    @Test("Right channel is zero when system is silent")
+    func separateChannels_silentSystem_rightIsZero() { ... }
+
+    @Test("Mic longer than system — right channel zero-padded")
+    func separateChannels_micLonger_rightZeroPadded() { ... }
+
+    @Test("System longer than mic — left channel zero-padded")
+    func separateChannels_systemLonger_leftZeroPadded() { ... }
+
+    @Test("Both inputs empty returns empty array")
+    func separateChannels_bothEmpty_returnsEmpty() { ... }
+
+    @Test("mix() with .blended strategy matches legacy mixMicWithStereoSystem")
+    func mix_blended_matchesLegacyBehavior() {
+        // Assert both produce identical output for the same input
+    }
+
+    @Test("mix() with .separated strategy produces no blending")
+    func mix_separated_noMicInRightChannel() { ... }
+
+    @Test("mix() with .multichannel falls back to blended")
+    func mix_multichannel_fallsBackToBlended() { ... }
+}
+```
+
+**Rust** — add to `#[cfg(test)] mod tests` in `stereo_mixer.rs`:
+```rust
+#[test] fn separate_channels_left_is_mic_only() { ... }
+#[test] fn separate_channels_right_is_system_mono_fold_not_l_only() { ... }
+#[test] fn separate_channels_silent_mic_left_is_zero() { ... }
+#[test] fn separate_channels_silent_system_right_is_zero() { ... }
+#[test] fn separate_channels_mic_longer_zero_pads_right() { ... }
+#[test] fn separate_channels_system_longer_zero_pads_left() { ... }
+#[test] fn separate_channels_both_empty() { ... }
+#[test] fn mix_blended_matches_legacy() { ... }
+#[test] fn mix_separated_no_mic_in_right_channel() { ... }
+```
+
+---
+
+## Step 4: Switch Processing Loop
+
+### macOS: `macOS/Sources/AudioCaptureKit/Capture/CompositeCaptureSession+Processing.swift`
+
+In `processBuffers()`, replace:
+```swift
+// before
+let stereoSamples = stereoMixer.mixMicWithStereoSystem(mic: micSamples, system: systemSamples)
+// after
+let stereoSamples = stereoMixer.mix(mic: micSamples, system: systemSamples, strategy: configuration.mixingStrategy)
+```
+
+### Windows: `windows/audio-capture-core/src/session/composite.rs`
+
+Same substitution in `process_buffers_inner`, passing `config.mixing_strategy`.
+
+---
+
+## Step 5: Add New Model Types
+
+### `ChannelBuffers` — full-quality, unprocessed per-channel samples
+
+**Swift** — add to `macOS/Sources/AudioCaptureKit/Models/AudioModels.swift`:
+```swift
+/// Raw per-channel audio samples from one processing cycle (~100 ms window).
+///
+/// Delivered via ``AudioCaptureDelegate/captureSession(_:didProduceChannelBuffers:)``
+/// before mixing and file writing. All samples are Float32, normalized to [-1.0, 1.0],
+/// at the session's configured sample rate.
+///
+/// ``systemSamples`` is full interleaved stereo [L0, R0, L1, R1, …]. The library
+/// does not fold, downsample, or otherwise modify system audio. If your use case
+/// requires mono system audio (e.g. for single-channel ASR), average the two channels
+/// yourself: `(system[2*i] + system[2*i+1]) / 2`.
+public struct ChannelBuffers: Sendable {
+    /// Mono microphone samples. Empty when mic capture is disabled.
+    public let micSamples: [Float]
+
+    /// Interleaved stereo system audio [L0, R0, L1, R1, …].
+    /// Empty when system capture is disabled.
+    public let systemSamples: [Float]
+
+    /// Sample rate of both arrays, in Hz.
+    public let sampleRate: Double
+
+    /// Wall-clock timestamp at the start of this buffer window.
+    public let timestamp: Date
+}
+```
+
+**Rust** — add to `windows/audio-capture-core/src/models/audio_models.rs`:
+```rust
+/// Raw per-channel audio samples from one processing cycle.
+/// `system_samples` is full interleaved stereo; the library does not fold it.
+#[derive(Debug, Clone)]
+pub struct ChannelBuffers {
+    pub mic_samples: Vec<f32>,
+    pub system_samples: Vec<f32>,  // interleaved stereo [L0, R0, L1, R1, ...]
+    pub sample_rate: f64,
+    pub timestamp_unix_secs: f64,
+}
+```
+
+### `ChannelLayout` enum — records the actual WAV layout for downstream decoders
+
+**Swift** — add to `AudioModels.swift`:
+```swift
+public enum ChannelLayout: String, Sendable, Codable {
+    /// Mic mixed into both channels (legacy/blended strategy).
+    case blended
+    /// Ch1 (Left) = mic only, Ch2 (Right) = system audio mono-folded (L+R)/2.
+    case separatedStereo
+    /// Single mono channel.
+    case mono
+}
+```
+
+Decode with `?? .blended` fallback so pre-existing recordings without this field decode correctly.
+
+**Rust** — add to `audio_models.rs` with `#[derive(Default)]` → `Blended`.
+
+### `label` on `AudioTrack`
+
+**Swift:** `public let label: String?` with `nil` default and `Codable` (omitted from JSON when nil)
+**Rust:** `pub label: Option<String>` with `#[serde(skip_serializing_if = "Option::is_none")]`
+
+### `channelLayout` on `RecordingMetadata`
+
+Reflects the actual WAV layout so decoders never guess:
+- `MixingStrategy.blended` → `ChannelLayout.blended`
+- `MixingStrategy.separated` → `ChannelLayout.separatedStereo`
+
+**Swift:** `public let channelLayout: ChannelLayout` with custom JSON decoding defaulting to `.blended`
+**Rust:** `pub channel_layout: ChannelLayout`
+
+Update `buildRecordingResult` track metadata for `.separated`:
+```swift
+AudioTrack(type: .mic, channel: .left, label: "Mic (Local)")
+AudioTrack(type: .system, channel: .right, label: "System (Remote, mono-fold)")
+```
+
+### New unit tests
+
+**Swift** — new file `macOS/Tests/AudioCaptureKitTests/ChannelLayoutTests.swift`:
+```swift
+@Suite("ChannelLayout — JSON coding and backward compatibility")
+struct ChannelLayoutTests {
+    @Test("separatedStereo encodes and round-trips correctly")
+    func separatedStereo_roundTrips() { ... }
+
+    @Test("Missing channelLayout in JSON defaults to blended (backward compat)")
+    func missingChannelLayout_defaultsToBlended() {
+        // Construct JSON with no "channelLayout" key; decode → assert .blended
+    }
+
+    @Test("AudioTrack label round-trips through JSON")
+    func audioTrack_label_roundTrips() { ... }
+
+    @Test("AudioTrack nil label is omitted from JSON output")
+    func audioTrack_nilLabel_omittedFromJSON() { ... }
+
+    @Test("ChannelBuffers is constructible with empty arrays")
+    func channelBuffers_emptyArraysAreValid() { ... }
+
+    @Test("ChannelBuffers systemSamples is interleaved stereo — not folded")
+    func channelBuffers_systemSamples_isFullStereo() {
+        // Verify that ChannelBuffers carries raw stereo (even frame count)
+        // to document the contract
+    }
+}
+```
+
+**Update** `macOS/Tests/AudioCaptureKitTests/RecordingMetadataTests.swift`:
+- `channelLayout_separatedStereo_serializesCorrectly()`
+- `channelLayout_missingFromJSON_defaultsToBlended()`
+- `audioTrack_labelIncludedInJSON_whenPresent()`
+
+**Rust** — add to `#[cfg(test)]` in `audio_models.rs`:
+```rust
+#[test] fn channel_layout_default_is_blended() { ... }
+#[test] fn channel_layout_json_round_trip() { ... }
+#[test] fn audio_track_label_omitted_when_none() { ... }
+#[test] fn channel_buffers_system_samples_is_stereo_interleaved() {
+    // Verify system_samples.len() % 2 == 0 contract via type conventions
+}
+```
+
+---
+
+## Step 6: New Delegate Callback
+
+### macOS: `macOS/Sources/AudioCaptureKit/Protocols/AudioCaptureDelegate.swift`
+
+Add with a **default no-op extension** (existing conformers compile unchanged):
+```swift
+/// Called on each processing cycle (~100 ms intervals) with raw per-channel
+/// audio samples, before mixing and file writing.
+///
+/// Use this to feed per-source audio into a speech-to-text pipeline, level
+/// meters, or any processing that needs clean source separation.
+///
+/// - Important: ``ChannelBuffers/systemSamples`` is interleaved stereo.
+///   The library does not fold it to mono. If your pipeline requires mono
+///   system audio, average the channels: `(system[2*i] + system[2*i+1]) / 2`.
+///
+/// Called on an unspecified background queue. Implementations must be
+/// non-blocking; dispatch heavy work asynchronously.
+func captureSession(_ session: any AudioCaptureSession,
+                    didProduceChannelBuffers buffers: ChannelBuffers)
+
+// extension AudioCaptureDelegate:
+func captureSession(_ session: any AudioCaptureSession,
+                    didProduceChannelBuffers buffers: ChannelBuffers) { }
+```
+
+### Windows: `windows/audio-capture-core/src/session/composite.rs`
+
+Add an optional typed callback on `CompositeSession`:
+```rust
+pub type ChannelBufferCallback = Arc<dyn Fn(&ChannelBuffers) + Send + Sync + 'static>;
+
+// on CompositeSession:
+pub fn set_channel_buffer_callback(&mut self, cb: ChannelBufferCallback)
+```
+
+### Wire up in processing loop
+
+**Swift** — in `processBuffers()`, before mixing:
+```swift
+let channelBuffers = ChannelBuffers(
+    micSamples: micSamples,
+    systemSamples: systemSamples,   // full interleaved stereo — no fold
+    sampleRate: stereoMixer.targetSampleRate
+)
+let delegate = sessionState.withLock { $0.delegate }
+delegate?.captureSession(self, didProduceChannelBuffers: channelBuffers)
+```
+
+**Rust** — thread the callback into `process_buffers_inner` and call it before mixing.
+
+---
+
+## Step 7: Raw PCM Export Option
+
+### `CaptureConfiguration` additions
+
+**Swift:**
+```swift
+/// When true, writes PCM sidecar files alongside the WAV:
+///
+/// - `{name}_mic.pcm`    — mono mic channel, signed 16-bit LE, no header
+/// - `{name}_system.pcm` — interleaved stereo system audio, signed 16-bit LE, no header
+///
+/// Sidecar files preserve full audio quality and are never encrypted.
+/// Default: false.
+public let exportRawPCM: Bool  // init default = false
+```
+
+**Rust:**
+```rust
+pub export_raw_pcm: bool,  // Default = false
+```
+
+### PCM sidecar management in `CompositeCaptureSession`
+
+Add two `FileHandle?` properties. Open on capture start (non-fatal: log + continue if creation fails). In `processBuffers()`:
+```swift
+if configuration.exportRawPCM {
+    let micPCM    = stereoMixer.convertToInt16PCM(micSamples)
+    let systemPCM = stereoMixer.convertToInt16PCM(systemSamples)  // stereo interleaved
+    micPCMFileHandle?.write(micPCM)
+    systemPCMFileHandle?.write(systemPCM)
+}
+```
+
+Close and nil on `finalizeRecording()`.
+
+### `RecordingResult` additions
+
+**Swift:**
+```swift
+/// [0] = mic.pcm (mono), [1] = system.pcm (stereo interleaved).
+/// Empty unless exportRawPCM was set.
+public let rawPCMFileURLs: [URL]  // default = []
+```
+
+**Rust:** `pub raw_pcm_file_paths: Vec<PathBuf>`
+
+### New unit tests
+
+**Swift** — new file `macOS/Tests/AudioCaptureKitTests/CaptureConfigurationTests.swift`:
+```swift
+@Suite("CaptureConfiguration")
+struct CaptureConfigurationTests {
+    @Test("exportRawPCM defaults to false")
+    func exportRawPCM_defaultsFalse() { ... }
+
+    @Test("mixingStrategy defaults to .blended")
+    func mixingStrategy_defaultsToBlended() { ... }
+
+    @Test("Channels 1 through 4 are valid")
+    func channels_validRange_1Through4() { ... }
+
+    @Test("Channel count 0 is invalid")
+    func channels_zero_isInvalid() { ... }
+
+    @Test("Channel count 5 is invalid")
+    func channels_five_isInvalid() { ... }
+}
+```
+
+**Update** `macOS/Tests/AudioCaptureKitTests/RecordingMetadataTests.swift`:
+- `rawPCMFileURLs_emptyByDefault()`
+
+**Rust** — add to `#[cfg(test)]` in `config.rs`:
+```rust
+#[test] fn export_raw_pcm_defaults_false() { ... }
+#[test] fn mixing_strategy_defaults_to_blended() { ... }
+#[test] fn channels_valid_range() { ... }
+#[test] fn channels_invalid_zero_and_five() { ... }
+```
+
+---
+
+## Step 8: Relax Channel Count Validation
+
+**Swift** — `CompositeCaptureSession.configure(_:)`:
+```swift
+guard (1...4).contains(configuration.channels) else {
+    throw CaptureError.configurationFailed("Channel count must be 1–4")
+}
+```
+
+Add docstring: channels 3–4 are reserved for future multi-mic support; the mixer currently produces 2-channel output regardless.
+
+**Rust** — `CaptureConfiguration.validate()`:
+```rust
+if !(1..=4).contains(&self.channels) {
+    return Err(format!("unsupported channel count: {}", self.channels));
+}
+```
+
+---
+
+## Critical Files
+
+| File | Change |
+|------|--------|
+| `macOS/Sources/AudioCaptureKit/Processing/StereoMixer.swift` | Add `mix(mic:system:strategy:)`, `separateChannels`; deprecate `mixMicWithStereoSystem` |
+| `macOS/Sources/AudioCaptureKit/Capture/CompositeCaptureSession+Processing.swift` | Switch to `mix()`, add delegate callback, add PCM sidecar writes |
+| `macOS/Sources/AudioCaptureKit/Protocols/AudioCaptureDelegate.swift` | Add `didProduceChannelBuffers` with default no-op |
+| `macOS/Sources/AudioCaptureKit/Models/AudioModels.swift` | Add `ChannelBuffers`, `ChannelLayout`; add `label` to `AudioTrack` |
+| `macOS/Sources/AudioCaptureKit/Models/MixingStrategy.swift` | New file: `MixingStrategy` enum |
+| `macOS/Sources/AudioCaptureKit/Models/CaptureConfiguration.swift` | Add `exportRawPCM`, `mixingStrategy`; relax channel validation |
+| `macOS/Sources/AudioCaptureKit/Models/RecordingResult.swift` | Add `rawPCMFileURLs`; add `channelLayout` to `RecordingMetadata` |
+| `windows/audio-capture-core/src/processing/stereo_mixer.rs` | Mirror StereoMixer changes |
+| `windows/audio-capture-core/src/session/composite.rs` | Switch mixer, add channel buffer callback |
+| `windows/audio-capture-core/src/models/audio_models.rs` | Add `ChannelBuffers`, `ChannelLayout`; add `label` |
+| `windows/audio-capture-core/src/models/mixing_strategy.rs` | New file: `MixingStrategy` enum |
+| `windows/audio-capture-core/src/models/config.rs` | Add `export_raw_pcm`, `mixing_strategy` |
+| `windows/audio-capture-core/src/models/recording_result.rs` | Add `raw_pcm_file_paths`, `channel_layout` |
+
+**New files:**
+- `macOS/Sources/AudioCaptureKit/Models/MixingStrategy.swift`
+- `windows/audio-capture-core/src/models/mixing_strategy.rs`
+- `docs/DIARIZATION.md`
+- `macOS/Tests/AudioCaptureKitTests/ChannelLayoutTests.swift`
+- `macOS/Tests/AudioCaptureKitTests/CaptureConfigurationTests.swift`
+
+---
+
+## Implementation Order
+
+1. Feature branch (`git checkout -b feature/channel-diarization-support`)
+2. `MixingStrategy` enum (both platforms)
+3. `StereoMixer` — add `mix()` + `separateChannels`, write mixer tests first
+4. Processing loop — switch to `mix()` dispatching on config
+5. New model types (`ChannelBuffers`, `ChannelLayout`, `label`, `channelLayout`) + tests
+6. Delegate callback — add method + default extension, wire into processing loop
+7. `CaptureConfiguration` additions (`exportRawPCM`, `mixingStrategy`, relaxed channel validation) + tests
+8. `RecordingResult` additions (`rawPCMFileURLs`, `channelLayout` in metadata)
+9. PCM sidecar file management in `CompositeCaptureSession`
+10. All above mirrored in Rust
+11. `docs/DIARIZATION.md` + `docs/API.md` updates
+
+---
+
+## Verification
+
+```bash
+# macOS
+swift test
+
+# Windows
+cd windows && cargo test && cargo clippy
+```
+
+Manual smoke test after implementation:
+- Capture with `mixingStrategy: .blended` (default) — confirm WAV is unchanged from current behavior
+- Capture with `mixingStrategy: .separated` — confirm WAV Ch1 is mic-only, Ch2 is system_L
+- Capture with `exportRawPCM: true` — confirm `_mic.pcm` (mono) and `_system.pcm` (stereo interleaved) are produced
+- Implement `didProduceChannelBuffers` in a test app — confirm it fires ~10×/sec with non-empty stereo `systemSamples`
+- Decode an old `RecordingMetadata` JSON (no `channelLayout` key) — confirm it deserializes to `.blended`
+
+
+If you need specific details from before exiting plan mode (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/kurtn/.claude/projects/-Users-kurtn-Developer-AudioCaptureKit/a48af607-e104-49d4-8b28-7c4c9aeb0042.jsonl
+
+If this plan can be broken down into multiple independent tasks, consider using the TeamCreate tool to create a team and parallelize the work.
