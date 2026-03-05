@@ -1,0 +1,34 @@
+{
+  "cli_version": "0.4.7",
+  "checkpoint_id": "9a4496690190",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    ".beads/.gitignore",
+    ".beads/README.md",
+    ".beads/config.yaml",
+    ".beads/interactions.jsonl",
+    ".beads/issues.jsonl",
+    ".beads/metadata.json",
+    ".gitattributes",
+    "AGENTS.md",
+    "docs/iOS-CAPTURE.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/9a/4496690190/0/metadata.json",
+      "transcript": "/9a/4496690190/0/full.jsonl",
+      "context": "/9a/4496690190/0/context.md",
+      "content_hash": "/9a/4496690190/0/content_hash.txt",
+      "prompt": "/9a/4496690190/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 24,
+    "cache_creation_tokens": 17712,
+    "cache_read_tokens": 670971,
+    "output_tokens": 4653,
+    "api_call_count": 20
+  }
+}

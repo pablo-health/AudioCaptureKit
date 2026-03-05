@@ -1,0 +1,38 @@
+{
+  "cli_version": "0.4.7",
+  "checkpoint_id": "9a4496690190",
+  "session_id": "dddf1665-6f9a-4bb9-8b9e-35942b684141",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-05T19:11:57.401423Z",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    ".beads/.gitignore",
+    ".beads/README.md",
+    ".beads/config.yaml",
+    ".beads/interactions.jsonl",
+    ".beads/issues.jsonl",
+    ".beads/metadata.json",
+    ".gitattributes",
+    "AGENTS.md",
+    "docs/iOS-CAPTURE.md"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "67ef647ecea9",
+  "token_usage": {
+    "input_tokens": 24,
+    "cache_creation_tokens": 17712,
+    "cache_read_tokens": 670971,
+    "output_tokens": 4653,
+    "api_call_count": 20
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-05T19:11:57.333954Z",
+    "agent_lines": 370,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 370,
+    "agent_percentage": 100
+  }
+}
