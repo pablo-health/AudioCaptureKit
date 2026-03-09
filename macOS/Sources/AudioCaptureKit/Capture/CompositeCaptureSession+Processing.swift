@@ -99,9 +99,34 @@ extension CompositeCaptureSession {
         guard let micBuf = micBuffer, let sysBuf = systemBuffer else { return nil }
 
         if config.enableSystemCapture {
-            let frames = min(sysBuf.count / 2, chunkSize)
+            let systemFrames = sysBuf.count / 2 // stereo → mono-equivalent
+            let micFrames = micBuf.count
+
+            // Use mic as the primary clock when system audio has a gap.
+            // This prevents mic buffer overflow during momentary system tap
+            // interruptions (app switch, audio route change, etc.) which
+            // would otherwise block ALL processing and drop mic samples.
+            let frames: Int
+            if systemFrames > 0 {
+                frames = min(min(systemFrames, micFrames), chunkSize)
+            } else if micFrames > 0 {
+                // System audio gap — drain mic with silence on the system channel
+                // so the recording continues without accumulating a backlog.
+                frames = min(micFrames, chunkSize)
+            } else {
+                return nil
+            }
             guard frames > 0 else { return nil }
-            return (mic: micBuf.read(count: frames), system: sysBuf.read(count: frames * 2))
+
+            let mic = micBuf.read(count: frames)
+            let system: [Float]
+            if systemFrames > 0 {
+                system = sysBuf.read(count: frames * 2)
+            } else {
+                // Insert silence for the missing system channel
+                system = [Float](repeating: 0, count: frames * 2)
+            }
+            return (mic: mic, system: system)
         } else {
             let mic = micBuf.read(count: chunkSize)
             return mic.isEmpty ? nil : (mic: mic, system: [])
@@ -258,7 +283,7 @@ extension CompositeCaptureSession {
     // MARK: - Recording Finalization
 
     /// Closes the file writer and builds the recording result.
-    func finalizeRecording() async throws -> RecordingResult {
+    func finalizeRecording() throws -> RecordingResult {
         guard let writer = fileWriter else {
             throw CaptureError.storageError("No file writer available")
         }
