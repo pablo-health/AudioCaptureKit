@@ -45,6 +45,10 @@ pub struct CaptureConfiguration {
     ///
     /// Default: false.
     pub export_raw_pcm: bool,
+
+    /// Duration in seconds of the internal ring buffer. Larger values tolerate
+    /// longer I/O stalls before dropping samples. Default is 30 seconds.
+    pub buffer_duration_seconds: f64,
 }
 
 impl CaptureConfiguration {
@@ -76,6 +80,7 @@ impl Default for CaptureConfiguration {
             enable_system_capture: true,
             mixing_strategy: MixingStrategy::default(),
             export_raw_pcm: false,
+            buffer_duration_seconds: 30.0,
         }
     }
 }

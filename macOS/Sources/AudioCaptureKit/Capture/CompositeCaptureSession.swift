@@ -254,7 +254,7 @@ extension CompositeCaptureSession: AudioCaptureSession {
         config: CaptureConfiguration,
         outputRate: Double
     ) async throws {
-        let bufferCapacity = Int(outputRate * 5)
+        let bufferCapacity = Int(outputRate * config.bufferDurationSeconds)
         micBuffer = AudioBufferManager(capacity: bufferCapacity)
         systemBuffer = AudioBufferManager(capacity: bufferCapacity * 2)
 
