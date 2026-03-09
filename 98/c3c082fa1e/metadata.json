@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.4.7",
+  "checkpoint_id": "98c3c082fa1e",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "macOS/Sources/AudioCaptureKit/Processing/AudioBufferManager.swift"
+  ],
+  "sessions": [
+    {
+      "metadata": "/98/c3c082fa1e/0/metadata.json",
+      "transcript": "/98/c3c082fa1e/0/full.jsonl",
+      "context": "/98/c3c082fa1e/0/context.md",
+      "content_hash": "/98/c3c082fa1e/0/content_hash.txt",
+      "prompt": "/98/c3c082fa1e/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 18,
+    "cache_creation_tokens": 16420,
+    "cache_read_tokens": 258337,
+    "output_tokens": 2937,
+    "api_call_count": 14
+  }
+}

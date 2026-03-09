@@ -1,0 +1,30 @@
+{
+  "cli_version": "0.4.7",
+  "checkpoint_id": "98c3c082fa1e",
+  "session_id": "f6d88569-0046-407b-8d35-19fa43a843a3",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-09T22:10:11.148264Z",
+  "branch": "main",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "macOS/Sources/AudioCaptureKit/Processing/AudioBufferManager.swift"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "79753479b946",
+  "token_usage": {
+    "input_tokens": 18,
+    "cache_creation_tokens": 16420,
+    "cache_read_tokens": 258337,
+    "output_tokens": 2937,
+    "api_call_count": 14
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-09T22:10:11.056308Z",
+    "agent_lines": 17,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 17,
+    "agent_percentage": 100
+  }
+}
