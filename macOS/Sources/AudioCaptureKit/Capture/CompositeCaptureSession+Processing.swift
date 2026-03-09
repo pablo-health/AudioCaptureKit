@@ -81,8 +81,12 @@ extension CompositeCaptureSession {
             $0.diagnostics.bytesWritten += pcmData.count
         }
 
+        writeChunk(pcmData, to: writer)
+    }
+
+    private func writeChunk(_ data: Data, to writer: EncryptedFileWriter) {
         do {
-            try writer.write(pcmData)
+            try writer.write(data)
         } catch {
             let delegate = sessionState.withLock { $0.delegate }
             if let captureError = error as? CaptureError {
@@ -98,39 +102,32 @@ extension CompositeCaptureSession {
     ) -> (mic: [Float], system: [Float])? {
         guard let micBuf = micBuffer, let sysBuf = systemBuffer else { return nil }
 
-        if config.enableSystemCapture {
-            let systemFrames = sysBuf.count / 2 // stereo → mono-equivalent
-            let micFrames = micBuf.count
-
-            // Use mic as the primary clock when system audio has a gap.
-            // This prevents mic buffer overflow during momentary system tap
-            // interruptions (app switch, audio route change, etc.) which
-            // would otherwise block ALL processing and drop mic samples.
-            let frames: Int
-            if systemFrames > 0 {
-                frames = min(min(systemFrames, micFrames), chunkSize)
-            } else if micFrames > 0 {
-                // System audio gap — drain mic with silence on the system channel
-                // so the recording continues without accumulating a backlog.
-                frames = min(micFrames, chunkSize)
-            } else {
-                return nil
-            }
-            guard frames > 0 else { return nil }
-
-            let mic = micBuf.read(count: frames)
-            let system: [Float]
-            if systemFrames > 0 {
-                system = sysBuf.read(count: frames * 2)
-            } else {
-                // Insert silence for the missing system channel
-                system = [Float](repeating: 0, count: frames * 2)
-            }
-            return (mic: mic, system: system)
-        } else {
+        guard config.enableSystemCapture else {
             let mic = micBuf.read(count: chunkSize)
             return mic.isEmpty ? nil : (mic: mic, system: [])
         }
+
+        let systemFrames = sysBuf.count / 2 // stereo → mono-equivalent
+        let micFrames = micBuf.count
+
+        // Use mic as the primary clock when system audio has a gap.
+        // Prevents mic buffer overflow during momentary system tap interruptions
+        // (app switch, audio route change) that would otherwise block processing.
+        let frames: Int
+        if systemFrames > 0 {
+            frames = min(min(systemFrames, micFrames), chunkSize)
+        } else if micFrames > 0 {
+            frames = min(micFrames, chunkSize)
+        } else {
+            return nil
+        }
+        guard frames > 0 else { return nil }
+
+        let mic = micBuf.read(count: frames)
+        let system = systemFrames > 0
+            ? sysBuf.read(count: frames * 2)
+            : [Float](repeating: 0, count: frames * 2)
+        return (mic: mic, system: system)
     }
 
     /// Async version used only for the final drain in stopCapture.
