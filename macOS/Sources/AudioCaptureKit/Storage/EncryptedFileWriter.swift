@@ -50,8 +50,8 @@ public final class EncryptedFileWriter: @unchecked Sendable {
     /// - Parameter configuration: The audio configuration for generating the WAV header.
     /// - Throws: ``CaptureError/storageError(_:)`` if the file cannot be created.
     public func open(configuration: CaptureConfiguration) throws {
-        try state.withLock { s in
-            guard !s.isOpen else { return }
+        try state.withLock { ws in
+            guard !ws.isOpen else { return }
 
             let directory = fileURL.deletingLastPathComponent()
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -60,7 +60,7 @@ public final class EncryptedFileWriter: @unchecked Sendable {
                 throw CaptureError.storageError("Failed to create file at \(fileURL.path)")
             }
 
-            s.fileHandle = try FileHandle(forWritingTo: fileURL)
+            ws.fileHandle = try FileHandle(forWritingTo: fileURL)
 
             let header = AudioFormatConverter.generateWAVHeader(
                 sampleRate: UInt32(configuration.sampleRate),
@@ -68,9 +68,9 @@ public final class EncryptedFileWriter: @unchecked Sendable {
                 channels: UInt16(configuration.channels),
                 dataSize: 0
             )
-            s.fileHandle?.write(header)
-            s.totalBytesWritten = UInt64(header.count)
-            s.isOpen = true
+            ws.fileHandle?.write(header)
+            ws.totalBytesWritten = UInt64(header.count)
+            ws.isOpen = true
         }
 
         logger.info("Opened file for writing: \(self.fileURL.lastPathComponent)")
@@ -92,8 +92,8 @@ public final class EncryptedFileWriter: @unchecked Sendable {
             nil
         }
 
-        try state.withLock { s in
-            guard s.isOpen, let fileHandle = s.fileHandle else {
+        try state.withLock { ws in
+            guard ws.isOpen, let fileHandle = ws.fileHandle else {
                 throw CaptureError.storageError("File is not open for writing")
             }
 
@@ -102,10 +102,10 @@ public final class EncryptedFileWriter: @unchecked Sendable {
                 let lengthData = Data(bytes: &chunkLength, count: 4)
                 fileHandle.write(lengthData)
                 fileHandle.write(encrypted)
-                s.totalBytesWritten += UInt64(4 + encrypted.count)
+                ws.totalBytesWritten += UInt64(4 + encrypted.count)
             } else {
                 fileHandle.write(data)
-                s.totalBytesWritten += UInt64(data.count)
+                ws.totalBytesWritten += UInt64(data.count)
             }
         }
     }
@@ -118,49 +118,31 @@ public final class EncryptedFileWriter: @unchecked Sendable {
     /// - Returns: The SHA-256 checksum of the completed file.
     /// - Throws: ``CaptureError/storageError(_:)`` if finalization fails.
     @discardableResult
-    public func close(actualSampleRate: Double? = nil, channels: UInt16 = 2, bitDepth: UInt16 = 16) throws -> String {
-        let totalBytes: UInt64 = try state.withLock { s in
-            guard s.isOpen, let fileHandle = s.fileHandle else {
+    public func close(
+        actualSampleRate: Double? = nil,
+        channels: UInt16 = 2,
+        bitDepth: UInt16 = 16
+    ) throws -> String {
+        let totalBytes: UInt64 = try state.withLock { ws in
+            guard ws.isOpen, let fileHandle = ws.fileHandle else {
                 throw CaptureError.storageError("File is not open")
             }
 
-            let dataSize = s.totalBytesWritten - 44
-            fileHandle.seek(toFileOffset: 4)
-            var fileSize = UInt32(truncatingIfNeeded: s.totalBytesWritten - 8)
-            fileHandle.write(Data(bytes: &fileSize, count: 4))
-
-            if let rate = actualSampleRate {
-                let sampleRate = UInt32(rate)
-                let byteRate = sampleRate * UInt32(channels) * UInt32(bitDepth) / 8
-                let blockAlign = channels * bitDepth / 8
-
-                fileHandle.seek(toFileOffset: 24)
-                var sr = sampleRate.littleEndian
-                fileHandle.write(Data(bytes: &sr, count: 4))
-
-                var br = byteRate.littleEndian
-                fileHandle.write(Data(bytes: &br, count: 4))
-
-                var ba = blockAlign.littleEndian
-                fileHandle.write(Data(bytes: &ba, count: 2))
-            }
-
-            fileHandle.seek(toFileOffset: 40)
-            var dataSizeValue = UInt32(truncatingIfNeeded: dataSize)
-            fileHandle.write(Data(bytes: &dataSizeValue, count: 4))
+            finalizeWAVHeader(
+                fileHandle: fileHandle,
+                totalBytesWritten: ws.totalBytesWritten,
+                actualSampleRate: actualSampleRate,
+                channels: channels,
+                bitDepth: bitDepth
+            )
 
             fileHandle.closeFile()
-            s.fileHandle = nil
-            s.isOpen = false
-
-            return s.totalBytesWritten
+            ws.fileHandle = nil
+            ws.isOpen = false
+            return ws.totalBytesWritten
         }
 
-        // Stream SHA-256 checksum in 256 KB chunks to avoid loading entire file into memory.
-        // A 1-hour recording at 48 kHz stereo 16-bit produces ~700 MB; loading it all at once
-        // would spike memory and risk OOM on constrained devices.
         let checksum = try streamingSHA256(fileURL: fileURL)
-
         logger.info("Closed file: \(self.fileURL.lastPathComponent), size: \(totalBytes) bytes")
         return checksum
     }
@@ -168,6 +150,41 @@ public final class EncryptedFileWriter: @unchecked Sendable {
     /// The total number of bytes written to the file.
     public var bytesWritten: UInt64 {
         state.withLock { $0.totalBytesWritten }
+    }
+
+    // MARK: - WAV Header
+
+    private func finalizeWAVHeader(
+        fileHandle: FileHandle,
+        totalBytesWritten: UInt64,
+        actualSampleRate: Double?,
+        channels: UInt16,
+        bitDepth: UInt16
+    ) {
+        let dataSize = totalBytesWritten - 44
+        fileHandle.seek(toFileOffset: 4)
+        var fileSize = UInt32(truncatingIfNeeded: totalBytesWritten - 8)
+        fileHandle.write(Data(bytes: &fileSize, count: 4))
+
+        if let rate = actualSampleRate {
+            let sampleRate = UInt32(rate)
+            let byteRate = sampleRate * UInt32(channels) * UInt32(bitDepth) / 8
+            let blockAlign = channels * bitDepth / 8
+
+            fileHandle.seek(toFileOffset: 24)
+            var sr = sampleRate.littleEndian
+            fileHandle.write(Data(bytes: &sr, count: 4))
+
+            var br = byteRate.littleEndian
+            fileHandle.write(Data(bytes: &br, count: 4))
+
+            var ba = blockAlign.littleEndian
+            fileHandle.write(Data(bytes: &ba, count: 2))
+        }
+
+        fileHandle.seek(toFileOffset: 40)
+        var dataSizeValue = UInt32(truncatingIfNeeded: dataSize)
+        fileHandle.write(Data(bytes: &dataSizeValue, count: 4))
     }
 
     // MARK: - Streaming Checksum
