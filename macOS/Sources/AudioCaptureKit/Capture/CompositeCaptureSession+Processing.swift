@@ -99,11 +99,16 @@ extension CompositeCaptureSession {
     }
 
     private func writeRawPCMSidecars(micSamples: [Float], systemSamples: [Float]) {
-        let micPCM = stereoMixer.convertToInt16PCM(micSamples)
-        let systemPCM = stereoMixer.convertToInt16PCM(systemSamples)
-        sessionState.withLock {
-            $0.micPCMFileHandle?.write(micPCM)
-            $0.systemPCMFileHandle?.write(systemPCM)
+        let (micHandle, systemHandle) = sessionState.withLock {
+            ($0.micPCMFileHandle, $0.systemPCMFileHandle)
+        }
+        if let micHandle {
+            let micPCM = stereoMixer.convertToInt16PCM(micSamples)
+            micHandle.write(micPCM)
+        }
+        if let systemHandle {
+            let systemPCM = stereoMixer.convertToInt16PCM(systemSamples)
+            systemHandle.write(systemPCM)
         }
     }
 
