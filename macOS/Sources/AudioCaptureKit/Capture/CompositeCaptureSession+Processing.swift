@@ -89,11 +89,11 @@ extension CompositeCaptureSession {
         guard let micBuf = micBuffer, let sysBuf = systemBuffer else { return nil }
 
         if config.enableSystemCapture {
-            let frames = await min(sysBuf.count / 2, chunkSize)
+            let frames = min(sysBuf.count / 2, chunkSize)
             guard frames > 0 else { return nil }
-            return await (mic: micBuf.read(count: frames), system: sysBuf.read(count: frames * 2))
+            return (mic: micBuf.read(count: frames), system: sysBuf.read(count: frames * 2))
         } else {
-            let mic = await micBuf.read(count: chunkSize)
+            let mic = micBuf.read(count: chunkSize)
             return mic.isEmpty ? nil : (mic: mic, system: [])
         }
     }
@@ -132,7 +132,7 @@ extension CompositeCaptureSession {
             $0.diagnostics.micSamplesTotal += resampled.count
             $0.diagnostics.micFormat = formatDesc
         }
-        Task { await micBuffer?.write(resampled) }
+        micBuffer?.write(resampled)
     }
 
     /// Processes a single system audio buffer from Core Audio tap.
@@ -166,7 +166,7 @@ extension CompositeCaptureSession {
             $0.diagnostics.systemSamplesTotal += resampled.count
             $0.diagnostics.systemFormat = "\(Int(reportedRate))->\(Int(targetRate))Hz \(channelCount)ch"
         }
-        Task { await systemBuffer?.write(resampled) }
+        systemBuffer?.write(resampled)
     }
 
     private func logFirstSystemCallback(buffer: AVAudioPCMBuffer, samples: [Float], targetRate: Double) {
