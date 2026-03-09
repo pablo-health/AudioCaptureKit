@@ -39,6 +39,10 @@ public struct CaptureConfiguration: Sendable {
     /// Default: false.
     public let exportRawPCM: Bool
 
+    /// Duration in seconds of the internal ring buffer. Larger values tolerate
+    /// longer I/O stalls before dropping samples. Default is 30 seconds.
+    public let bufferDurationSeconds: TimeInterval
+
     public init(
         sampleRate: Double = 48000,
         bitDepth: Int = 16,
@@ -50,7 +54,8 @@ public struct CaptureConfiguration: Sendable {
         enableMicCapture: Bool = true,
         enableSystemCapture: Bool = true,
         mixingStrategy: MixingStrategy = .blended,
-        exportRawPCM: Bool = false
+        exportRawPCM: Bool = false,
+        bufferDurationSeconds: TimeInterval = 30
     ) {
         self.sampleRate = sampleRate
         self.bitDepth = bitDepth
@@ -63,5 +68,6 @@ public struct CaptureConfiguration: Sendable {
         self.enableSystemCapture = enableSystemCapture
         self.mixingStrategy = mixingStrategy
         self.exportRawPCM = exportRawPCM
+        self.bufferDurationSeconds = bufferDurationSeconds
     }
 }

@@ -186,8 +186,7 @@ impl<M: CaptureProvider, S: CaptureProvider> CompositeSession<M, S> {
 
         self.mixer = StereoMixer::new(config.sample_rate);
 
-        // Size ring buffers for 5 seconds of audio
-        let buffer_capacity = (config.sample_rate * 5.0) as usize;
+        let buffer_capacity = (config.sample_rate * config.buffer_duration_seconds) as usize;
         self.mic_buffer = Arc::new(Mutex::new(RingBuffer::new(buffer_capacity)));
         self.system_buffer = Arc::new(Mutex::new(RingBuffer::new(buffer_capacity * 2))); // stereo
 
