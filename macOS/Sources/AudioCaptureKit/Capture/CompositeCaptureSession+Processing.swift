@@ -25,29 +25,38 @@ extension CompositeCaptureSession {
         }
     }
 
-    func startProcessingLoop() {
-        processingTask = Task { [weak self] in
-            while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 100_000_000)
-                guard let self, !Task.isCancelled else { break }
+    /// Called from audio callbacks when the ring buffer crosses the threshold.
+    /// Dispatches processing to a dedicated queue so the audio thread returns immediately.
+    func scheduleProcessingIfNeeded() {
+        let alreadyScheduled = processingScheduled.withLock { scheduled in
+            if scheduled { return true }
+            scheduled = true
+            return false
+        }
+        guard !alreadyScheduled else { return }
 
-                let currentState = sessionState.withLock { $0.state }
-                if case .capturing = currentState {
-                    await processBuffers()
-                }
+        processingQueue.async { [weak self] in
+            guard let self else { return }
+            self.processingScheduled.withLock { $0 = false }
+
+            let currentState = self.sessionState.withLock { $0.state }
+            if case .capturing = currentState {
+                // Process synchronously on the processing queue — no Task.sleep, no cooperative pool.
+                self.processBuffersSync()
             }
         }
     }
 
-    func processBuffers() async {
+    /// Synchronous version of processBuffers for use on the dedicated processing queue.
+    private func processBuffersSync() {
         guard let writer = fileWriter else { return }
 
         let config = configuration
-        let chunkSize = Int(config.sampleRate * 0.1) // 100ms frames
-        guard let (micSamples, systemSamples) =
-            await readPendingSamples(config: config, chunkSize: chunkSize) else { return }
+        let chunkSize = Int(config.sampleRate) // 1 second of frames
 
-        // Deliver raw channel buffers to delegate before mixing
+        guard let (micSamples, systemSamples) =
+            readPendingSamplesSync(config: config, chunkSize: chunkSize) else { return }
+
         let channelBuffers = ChannelBuffers(
             micSamples: micSamples,
             systemSamples: systemSamples,
@@ -73,7 +82,7 @@ extension CompositeCaptureSession {
         }
 
         do {
-            try await writer.write(pcmData)
+            try writer.write(pcmData)
         } catch {
             let delegate = sessionState.withLock { $0.delegate }
             if let captureError = error as? CaptureError {
@@ -82,10 +91,11 @@ extension CompositeCaptureSession {
         }
     }
 
-    private func readPendingSamples(
+    /// Reads pending samples synchronously (no actor/async needed).
+    private func readPendingSamplesSync(
         config: CaptureConfiguration,
         chunkSize: Int
-    ) async -> (mic: [Float], system: [Float])? {
+    ) -> (mic: [Float], system: [Float])? {
         guard let micBuf = micBuffer, let sysBuf = systemBuffer else { return nil }
 
         if config.enableSystemCapture {
@@ -98,17 +108,22 @@ extension CompositeCaptureSession {
         }
     }
 
+    /// Async version used only for the final drain in stopCapture.
+    func processBuffers() async {
+        processBuffersSync()
+    }
+
     private func writeRawPCMSidecars(micSamples: [Float], systemSamples: [Float]) {
         let (micHandle, systemHandle) = sessionState.withLock {
             ($0.micPCMFileHandle, $0.systemPCMFileHandle)
         }
-        if let micHandle {
-            let micPCM = stereoMixer.convertToInt16PCM(micSamples)
-            micHandle.write(micPCM)
-        }
-        if let systemHandle {
-            let systemPCM = stereoMixer.convertToInt16PCM(systemSamples)
-            systemHandle.write(systemPCM)
+        // Convert in-memory (fast), then dispatch the blocking FileHandle writes
+        // to a dedicated I/O queue so the processing loop can drain the next cycle.
+        let micPCM = micHandle != nil ? stereoMixer.convertToInt16PCM(micSamples) : nil
+        let systemPCM = systemHandle != nil ? stereoMixer.convertToInt16PCM(systemSamples) : nil
+        pcmWriteQueue.async {
+            if let micPCM { micHandle?.write(micPCM) }
+            if let systemPCM { systemHandle?.write(systemPCM) }
         }
     }
 
@@ -133,6 +148,9 @@ extension CompositeCaptureSession {
             $0.diagnostics.micFormat = formatDesc
         }
         micBuffer?.write(resampled)
+        if let micBuffer, micBuffer.count >= processingThreshold {
+            scheduleProcessingIfNeeded()
+        }
     }
 
     /// Processes a single system audio buffer from Core Audio tap.
@@ -250,7 +268,7 @@ extension CompositeCaptureSession {
 
         let checksum: String
         do {
-            checksum = try await writer.close(
+            checksum = try writer.close(
                 actualSampleRate: actualRate,
                 channels: UInt16(configuration.channels),
                 bitDepth: UInt16(configuration.bitDepth)
@@ -259,6 +277,9 @@ extension CompositeCaptureSession {
             setState(.failed(.storageError("Failed to close file")))
             throw error
         }
+
+        // Drain any pending PCM writes before closing file handles.
+        pcmWriteQueue.sync {}
 
         let rawPCMURLs: [URL] = sessionState.withLock {
             $0.micPCMFileHandle?.closeFile()

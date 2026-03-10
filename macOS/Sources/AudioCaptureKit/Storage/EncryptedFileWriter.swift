@@ -16,7 +16,7 @@ import os
 ///   - 12 bytes: nonce
 ///   - N bytes: ciphertext
 ///   - 16 bytes: authentication tag
-public actor EncryptedFileWriter {
+public final class EncryptedFileWriter: @unchecked Sendable {
     private let fileURL: URL
     private let encryptor: (any CaptureEncryptor)?
     private var fileHandle: FileHandle?

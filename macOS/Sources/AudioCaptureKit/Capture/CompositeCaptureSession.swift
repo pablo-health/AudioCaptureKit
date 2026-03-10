@@ -50,7 +50,21 @@ public final class CompositeCaptureSession: @unchecked Sendable {
     var systemBuffer: AudioBufferManager?
 
     var durationTimer: Task<Void, Never>?
-    var processingTask: Task<Void, Never>?
+
+    /// Dedicated queue for audio processing (mixing, conversion, file writes).
+    /// Replaces the previous Task.sleep polling loop — processing is now triggered
+    /// directly by audio callbacks when the ring buffer crosses a threshold.
+    let processingQueue = DispatchQueue(label: "com.audiocapturekit.processing")
+
+    /// Dedicated queue for PCM sidecar file writes — keeps disk I/O off the processing path.
+    let pcmWriteQueue = DispatchQueue(label: "com.audiocapturekit.pcm-io")
+
+    /// Threshold in samples — when the mic buffer reaches this count, processing is dispatched.
+    /// Set to 1 second of audio (configured in startCapture).
+    var processingThreshold = 48000
+
+    /// Flag to prevent multiple concurrent processBuffers dispatches.
+    let processingScheduled = UnfairLock(false)
 
     let logger = Logger(
         subsystem: "com.audiocapturekit",
@@ -166,6 +180,8 @@ extension CompositeCaptureSession: AudioCaptureSession {
         try await startMicCapture(config: config)
         await startSystemCapture(config: config)
 
+        processingThreshold = Int(outputRate) // 1 second of samples
+
         sessionState.withLock {
             $0.captureStartTime = Date()
             $0.pausedDuration = 0
@@ -173,7 +189,6 @@ extension CompositeCaptureSession: AudioCaptureSession {
         setState(.capturing(duration: 0))
 
         startDurationTimer()
-        startProcessingLoop()
     }
 
     public func pauseCapture() throws {
@@ -221,9 +236,9 @@ extension CompositeCaptureSession: AudioCaptureSession {
 
         durationTimer?.cancel()
         durationTimer = nil
-        processingTask?.cancel()
-        processingTask = nil
 
+        // Drain any in-flight processing, then do a final flush of remaining samples.
+        processingQueue.sync {}
         await processBuffers()
 
         return try await finalizeRecording()
@@ -280,7 +295,7 @@ extension CompositeCaptureSession: AudioCaptureSession {
         )
 
         do {
-            try await writer.open(configuration: outputConfig)
+            try writer.open(configuration: outputConfig)
         } catch {
             setState(.failed(.storageError("Failed to open file")))
             throw error

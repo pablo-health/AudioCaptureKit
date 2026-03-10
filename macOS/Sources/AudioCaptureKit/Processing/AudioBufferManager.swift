@@ -40,8 +40,8 @@ public final class AudioBufferManager: @unchecked Sendable {
     /// - Parameter samples: The audio samples to write.
     public func write(_ samples: [Float]) {
         let count = samples.count
-        state.withLock { s in
-            let capacity = s.capacity
+        state.withLock { st in
+            let capacity = st.capacity
 
             let samplesToWrite: ArraySlice<Float>
             if count > capacity {
@@ -51,18 +51,18 @@ public final class AudioBufferManager: @unchecked Sendable {
                 samplesToWrite = samples[...]
             }
 
-            let overflow = (s.availableSamples + samplesToWrite.count) - capacity
+            let overflow = (st.availableSamples + samplesToWrite.count) - capacity
             if overflow > 0 {
                 logger.warning("Buffer overflow: dropping \(overflow) oldest samples")
-                s.readIndex = (s.readIndex + overflow) % capacity
-                s.availableSamples -= overflow
+                st.readIndex = (st.readIndex + overflow) % capacity
+                st.availableSamples -= overflow
             }
 
             for sample in samplesToWrite {
-                s.buffer[s.writeIndex] = sample
-                s.writeIndex = (s.writeIndex + 1) % capacity
+                st.buffer[st.writeIndex] = sample
+                st.writeIndex = (st.writeIndex + 1) % capacity
             }
-            s.availableSamples += samplesToWrite.count
+            st.availableSamples += samplesToWrite.count
         }
     }
 
@@ -70,16 +70,16 @@ public final class AudioBufferManager: @unchecked Sendable {
     /// - Parameter count: The maximum number of samples to read.
     /// - Returns: An array of samples, which may be shorter than `count` if fewer are available.
     public func read(count: Int) -> [Float] {
-        state.withLock { s in
-            let samplesToRead = min(count, s.availableSamples)
+        state.withLock { st in
+            let samplesToRead = min(count, st.availableSamples)
             guard samplesToRead > 0 else { return [] }
 
             var result = [Float](repeating: 0, count: samplesToRead)
             for i in 0 ..< samplesToRead {
-                result[i] = s.buffer[(s.readIndex + i) % s.capacity]
+                result[i] = st.buffer[(st.readIndex + i) % st.capacity]
             }
-            s.readIndex = (s.readIndex + samplesToRead) % s.capacity
-            s.availableSamples -= samplesToRead
+            st.readIndex = (st.readIndex + samplesToRead) % st.capacity
+            st.availableSamples -= samplesToRead
             return result
         }
     }
@@ -96,10 +96,10 @@ public final class AudioBufferManager: @unchecked Sendable {
 
     /// Removes all samples from the buffer.
     public func reset() {
-        state.withLock { s in
-            s.writeIndex = 0
-            s.readIndex = 0
-            s.availableSamples = 0
+        state.withLock { st in
+            st.writeIndex = 0
+            st.readIndex = 0
+            st.availableSamples = 0
         }
     }
 }
