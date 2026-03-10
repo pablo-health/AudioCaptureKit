@@ -52,6 +52,9 @@ public final class CompositeCaptureSession: @unchecked Sendable {
     var durationTimer: Task<Void, Never>?
     var processingTask: Task<Void, Never>?
 
+    /// Dedicated queue for PCM sidecar file writes — keeps disk I/O off the processing loop.
+    let pcmWriteQueue = DispatchQueue(label: "com.audiocapturekit.pcm-io")
+
     let logger = Logger(
         subsystem: "com.audiocapturekit",
         category: "CompositeCaptureSession"

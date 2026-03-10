@@ -102,13 +102,13 @@ extension CompositeCaptureSession {
         let (micHandle, systemHandle) = sessionState.withLock {
             ($0.micPCMFileHandle, $0.systemPCMFileHandle)
         }
-        if let micHandle {
-            let micPCM = stereoMixer.convertToInt16PCM(micSamples)
-            micHandle.write(micPCM)
-        }
-        if let systemHandle {
-            let systemPCM = stereoMixer.convertToInt16PCM(systemSamples)
-            systemHandle.write(systemPCM)
+        // Convert in-memory (fast), then dispatch the blocking FileHandle writes
+        // to a dedicated I/O queue so the processing loop can drain the next cycle.
+        let micPCM = micHandle != nil ? stereoMixer.convertToInt16PCM(micSamples) : nil
+        let systemPCM = systemHandle != nil ? stereoMixer.convertToInt16PCM(systemSamples) : nil
+        pcmWriteQueue.async {
+            if let micPCM { micHandle?.write(micPCM) }
+            if let systemPCM { systemHandle?.write(systemPCM) }
         }
     }
 
@@ -259,6 +259,9 @@ extension CompositeCaptureSession {
             setState(.failed(.storageError("Failed to close file")))
             throw error
         }
+
+        // Drain any pending PCM writes before closing file handles.
+        pcmWriteQueue.sync {}
 
         let rawPCMURLs: [URL] = sessionState.withLock {
             $0.micPCMFileHandle?.closeFile()
