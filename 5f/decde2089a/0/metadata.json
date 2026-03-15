@@ -1,0 +1,36 @@
+{
+  "cli_version": "0.4.7",
+  "checkpoint_id": "5fdecde2089a",
+  "session_id": "d2d907a4-fab4-4f51-9a9f-3f7aa0564138",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-15T21:13:55.585184Z",
+  "branch": "fix/encrypt-pcm-sidecars",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "macOS/Sources/AudioCaptureKit/Capture/CompositeCaptureSession+Processing.swift",
+    "macOS/Sources/AudioCaptureKit/Capture/CompositeCaptureSession.swift",
+    "macOS/Sources/AudioCaptureKit/Models/CaptureConfiguration.swift",
+    "macOS/Sources/AudioCaptureKit/Models/RecordingResult.swift",
+    "windows/audio-capture-core/src/models/config.rs",
+    "windows/audio-capture-core/src/models/recording_result.rs",
+    "windows/audio-capture-core/src/session/composite.rs"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "e53c7a2a2025",
+  "token_usage": {
+    "input_tokens": 43,
+    "cache_creation_tokens": 80313,
+    "cache_read_tokens": 2109331,
+    "output_tokens": 11681,
+    "api_call_count": 37
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-15T21:13:55.386108Z",
+    "agent_lines": 45,
+    "human_added": 37,
+    "human_modified": 30,
+    "human_removed": 0,
+    "total_committed": 112,
+    "agent_percentage": 40.17857142857143
+  }
+}

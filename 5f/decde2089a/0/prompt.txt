@@ -1,0 +1,9 @@
+when we create the the sidecar PCM files, they are not encrypted
+
+---
+
+yes please
+
+---
+
+create a branch and open a PR please

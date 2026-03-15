@@ -1,0 +1,32 @@
+{
+  "cli_version": "0.4.7",
+  "checkpoint_id": "5fdecde2089a",
+  "strategy": "manual-commit",
+  "branch": "fix/encrypt-pcm-sidecars",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "macOS/Sources/AudioCaptureKit/Capture/CompositeCaptureSession+Processing.swift",
+    "macOS/Sources/AudioCaptureKit/Capture/CompositeCaptureSession.swift",
+    "macOS/Sources/AudioCaptureKit/Models/CaptureConfiguration.swift",
+    "macOS/Sources/AudioCaptureKit/Models/RecordingResult.swift",
+    "windows/audio-capture-core/src/models/config.rs",
+    "windows/audio-capture-core/src/models/recording_result.rs",
+    "windows/audio-capture-core/src/session/composite.rs"
+  ],
+  "sessions": [
+    {
+      "metadata": "/5f/decde2089a/0/metadata.json",
+      "transcript": "/5f/decde2089a/0/full.jsonl",
+      "context": "/5f/decde2089a/0/context.md",
+      "content_hash": "/5f/decde2089a/0/content_hash.txt",
+      "prompt": "/5f/decde2089a/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 43,
+    "cache_creation_tokens": 80313,
+    "cache_read_tokens": 2109331,
+    "output_tokens": 11681,
+    "api_call_count": 37
+  }
+}
