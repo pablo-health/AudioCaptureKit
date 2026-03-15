@@ -18,6 +18,7 @@ use crate::processing::wav_format;
 use crate::storage::encrypted_writer::EncryptedFileWriter;
 use crate::traits::capture_delegate::CaptureDelegate;
 use crate::traits::capture_provider::CaptureProvider;
+use crate::traits::encryptor::CaptureEncryptor;
 
 pub type ChannelBufferCallback = Arc<dyn Fn(&ChannelBuffers) + Send + Sync + 'static>;
 
@@ -30,6 +31,7 @@ struct ProcessingContext {
     export_raw_pcm: bool,
     mic_pcm_writer: Arc<Mutex<Option<std::fs::File>>>,
     system_pcm_writer: Arc<Mutex<Option<std::fs::File>>>,
+    pcm_encryptor: Option<Box<dyn CaptureEncryptor>>,
 }
 
 /// Internal mutable session state, protected by `parking_lot::Mutex`.
@@ -225,8 +227,9 @@ impl<M: CaptureProvider, S: CaptureProvider> CompositeSession<M, S> {
 
         // Open PCM sidecar files if requested
         if config.export_raw_pcm {
-            let mic_pcm_path = config.output_directory.join(format!("{}_mic.pcm", file_name));
-            let system_pcm_path = config.output_directory.join(format!("{}_system.pcm", file_name));
+            let pcm_ext = if config.encryptor.is_some() { "enc.pcm" } else { "pcm" };
+            let mic_pcm_path = config.output_directory.join(format!("{}_mic.{}", file_name, pcm_ext));
+            let system_pcm_path = config.output_directory.join(format!("{}_system.{}", file_name, pcm_ext));
             match std::fs::File::create(&mic_pcm_path) {
                 Ok(f) => {
                     *self.mic_pcm_writer.lock() = Some(f);
@@ -525,6 +528,7 @@ impl<M: CaptureProvider, S: CaptureProvider> CompositeSession<M, S> {
             export_raw_pcm: self.config.as_ref().map(|c| c.export_raw_pcm).unwrap_or(false),
             mic_pcm_writer: Arc::clone(&self.mic_pcm_writer),
             system_pcm_writer: Arc::clone(&self.system_pcm_writer),
+            pcm_encryptor: self.config.as_ref().and_then(|c| c.encryptor.clone()),
         };
 
         let handle = thread::Builder::new()
@@ -597,6 +601,7 @@ impl<M: CaptureProvider, S: CaptureProvider> CompositeSession<M, S> {
             export_raw_pcm: config.export_raw_pcm,
             mic_pcm_writer: Arc::clone(&self.mic_pcm_writer),
             system_pcm_writer: Arc::clone(&self.system_pcm_writer),
+            pcm_encryptor: config.encryptor.clone(),
         };
 
         Self::process_buffers_inner(
@@ -607,6 +612,24 @@ impl<M: CaptureProvider, S: CaptureProvider> CompositeSession<M, S> {
             &self.session_state,
             &ctx,
         );
+    }
+
+    /// Writes a PCM chunk to a sidecar file, encrypting with the same length-prefixed
+    /// format as `EncryptedFileWriter` when an encryptor is provided.
+    fn write_pcm_chunk(file: &mut std::fs::File, data: &[u8], encryptor: Option<&dyn CaptureEncryptor>) {
+        use std::io::Write;
+        if let Some(enc) = encryptor {
+            match enc.encrypt(data) {
+                Ok(encrypted) => {
+                    let chunk_len = (encrypted.len() as u32).to_le_bytes();
+                    let _ = file.write_all(&chunk_len);
+                    let _ = file.write_all(&encrypted);
+                }
+                Err(e) => log::error!("PCM sidecar encryption failed: {}", e),
+            }
+        } else {
+            let _ = file.write_all(data);
+        }
     }
 
     /// Core buffer processing: read ring buffers → mix → convert to PCM → write.
@@ -657,17 +680,15 @@ impl<M: CaptureProvider, S: CaptureProvider> CompositeSession<M, S> {
             cb(&buffers);
         }
 
-        // Write raw PCM sidecars if enabled
+        // Write PCM sidecars if enabled, encrypting when an encryptor is configured
         if ctx.export_raw_pcm {
             let mic_pcm = mixer.convert_to_int16_pcm(&mic_samples);
             let system_pcm = mixer.convert_to_int16_pcm(&system_samples);
             if let Some(ref mut f) = *ctx.mic_pcm_writer.lock() {
-                use std::io::Write;
-                let _ = f.write_all(&mic_pcm);
+                Self::write_pcm_chunk(f, &mic_pcm, ctx.pcm_encryptor.as_deref());
             }
             if let Some(ref mut f) = *ctx.system_pcm_writer.lock() {
-                use std::io::Write;
-                let _ = f.write_all(&system_pcm);
+                Self::write_pcm_chunk(f, &system_pcm, ctx.pcm_encryptor.as_deref());
             }
         }
 

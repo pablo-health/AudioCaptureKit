@@ -11,8 +11,8 @@ pub struct RecordingResult {
     pub duration_secs: f64,
     pub metadata: RecordingMetadata,
     pub checksum: String,
-    /// Paths of raw PCM sidecar files. [0] = mic.pcm (mono), [1] = system.pcm (stereo).
-    /// Empty unless export_raw_pcm was enabled.
+    /// Paths of PCM sidecar files. [0] = mic (mono), [1] = system (stereo).
+    /// Uses `.enc.pcm` extension when encrypted. Empty unless export_raw_pcm was enabled.
     pub raw_pcm_file_paths: Vec<PathBuf>,
 }
 

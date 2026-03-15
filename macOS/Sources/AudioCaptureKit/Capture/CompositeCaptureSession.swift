@@ -307,9 +307,11 @@ extension CompositeCaptureSession: AudioCaptureSession {
     }
 
     /// Opens PCM sidecar files for raw channel export.
+    /// Uses `.enc.pcm` extension when an encryptor is configured.
     private func openPCMSidecarFiles(baseName: String, directory: URL) {
-        let micURL = directory.appendingPathComponent("\(baseName)_mic.pcm")
-        let systemURL = directory.appendingPathComponent("\(baseName)_system.pcm")
+        let ext = configuration.encryptor != nil ? "enc.pcm" : "pcm"
+        let micURL = directory.appendingPathComponent("\(baseName)_mic.\(ext)")
+        let systemURL = directory.appendingPathComponent("\(baseName)_system.\(ext)")
         let fm = FileManager.default
 
         var handles: (mic: FileHandle?, system: FileHandle?) = (nil, nil)

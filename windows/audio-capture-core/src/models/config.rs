@@ -39,10 +39,12 @@ pub struct CaptureConfiguration {
     /// Default is `MixingStrategy::Blended` to preserve existing behavior.
     pub mixing_strategy: MixingStrategy,
 
-    /// When true, writes raw PCM sidecar files alongside the WAV:
+    /// When true, writes PCM sidecar files alongside the WAV:
     /// - `{name}_mic.pcm`    -- mono mic, signed 16-bit LE, no header
     /// - `{name}_system.pcm` -- interleaved stereo system audio, signed 16-bit LE, no header
     ///
+    /// When an `encryptor` is set, sidecar files use `.enc.pcm` extension and the
+    /// same length-prefixed encrypted chunk format as the main WAV file (no plaintext on disk).
     /// Default: false.
     pub export_raw_pcm: bool,
 
