@@ -229,7 +229,9 @@ impl<M: CaptureProvider, S: CaptureProvider> CompositeSession<M, S> {
         if config.export_raw_pcm {
             let pcm_ext = if config.encryptor.is_some() { "enc.pcm" } else { "pcm" };
             let mic_pcm_path = config.output_directory.join(format!("{}_mic.{}", file_name, pcm_ext));
-            let system_pcm_path = config.output_directory.join(format!("{}_system.{}", file_name, pcm_ext));
+            let system_pcm_path = config
+                .output_directory
+                .join(format!("{}_system.{}", file_name, pcm_ext));
             match std::fs::File::create(&mic_pcm_path) {
                 Ok(f) => {
                     *self.mic_pcm_writer.lock() = Some(f);
