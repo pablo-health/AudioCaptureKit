@@ -14,8 +14,8 @@ public struct RecordingResult: Sendable, Equatable {
     /// SHA-256 checksum of the recorded file.
     public let checksum: String
 
-    /// URLs of raw PCM sidecar files. [0] = mic.pcm (mono), [1] = system.pcm (stereo interleaved).
-    /// Empty unless exportRawPCM was enabled in configuration.
+    /// URLs of PCM sidecar files. [0] = mic (mono), [1] = system (stereo interleaved).
+    /// Uses `.enc.pcm` extension when encrypted. Empty unless exportRawPCM was enabled.
     public let rawPCMFileURLs: [URL]
 
     public init(

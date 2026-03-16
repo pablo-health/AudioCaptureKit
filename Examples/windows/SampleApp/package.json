@@ -21,7 +21,7 @@
     "@radix-ui/react-select": "^2.1.2",
     "@radix-ui/react-switch": "^1.1.1",
     "@radix-ui/react-slot": "^1.1.0",
-    "lucide-react": "^0.576.0"
+    "lucide-react": "^0.577.0"
   },
   "devDependencies": {
     "@types/react": "^19.0.0",
@@ -32,6 +32,6 @@
     "tailwindcss": "^4.2.1",
     "typescript": "^5.7.2",
     "vite": "^7.0.0",
-    "@tauri-apps/cli": "^2.0.0"
+    "@tauri-apps/cli": "^2.10.1"
   }
 }

@@ -139,13 +139,42 @@ extension CompositeCaptureSession {
         let (micHandle, systemHandle) = sessionState.withLock {
             ($0.micPCMFileHandle, $0.systemPCMFileHandle)
         }
+        let encryptor = configuration.encryptor
+
         // Convert in-memory (fast), then dispatch the blocking FileHandle writes
         // to a dedicated I/O queue so the processing loop can drain the next cycle.
         let micPCM = micHandle != nil ? stereoMixer.convertToInt16PCM(micSamples) : nil
         let systemPCM = systemHandle != nil ? stereoMixer.convertToInt16PCM(systemSamples) : nil
-        pcmWriteQueue.async {
-            if let micPCM { micHandle?.write(micPCM) }
-            if let systemPCM { systemHandle?.write(systemPCM) }
+        pcmWriteQueue.async { [logger] in
+            if let micPCM {
+                Self.writePCMChunk(micPCM, to: micHandle, encryptor: encryptor, logger: logger)
+            }
+            if let systemPCM {
+                Self.writePCMChunk(systemPCM, to: systemHandle, encryptor: encryptor, logger: logger)
+            }
+        }
+    }
+
+    /// Writes a single PCM chunk, encrypting with the same length-prefixed format
+    /// as `EncryptedFileWriter` when an encryptor is provided.
+    private static func writePCMChunk(
+        _ data: Data,
+        to handle: FileHandle?,
+        encryptor: (any CaptureEncryptor)?,
+        logger: Logger
+    ) {
+        guard let handle else { return }
+        if let encryptor {
+            do {
+                let encrypted = try encryptor.encrypt(data)
+                var chunkLength = UInt32(encrypted.count).littleEndian
+                handle.write(Data(bytes: &chunkLength, count: 4))
+                handle.write(encrypted)
+            } catch {
+                logger.error("PCM sidecar encryption failed: \(error)")
+            }
+        } else {
+            handle.write(data)
         }
     }
 
