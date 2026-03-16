@@ -1,0 +1,5 @@
+CI pipeline fails
+
+---
+
+yes

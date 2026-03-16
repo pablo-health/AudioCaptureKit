@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.4.7",
+  "checkpoint_id": "25be52c9af61",
+  "strategy": "manual-commit",
+  "branch": "fix/encrypt-pcm-sidecars",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "windows/audio-capture-core/src/session/composite.rs"
+  ],
+  "sessions": [
+    {
+      "metadata": "/25/be52c9af61/0/metadata.json",
+      "transcript": "/25/be52c9af61/0/full.jsonl",
+      "context": "/25/be52c9af61/0/context.md",
+      "content_hash": "/25/be52c9af61/0/content_hash.txt",
+      "prompt": "/25/be52c9af61/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 18,
+    "cache_creation_tokens": 57900,
+    "cache_read_tokens": 333187,
+    "output_tokens": 1869,
+    "api_call_count": 14
+  }
+}

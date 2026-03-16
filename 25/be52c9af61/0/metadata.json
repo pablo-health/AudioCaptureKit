@@ -1,0 +1,30 @@
+{
+  "cli_version": "0.4.7",
+  "checkpoint_id": "25be52c9af61",
+  "session_id": "fad7e4af-8f12-4a07-89fd-d9955198211f",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-16T00:18:36.185829Z",
+  "branch": "fix/encrypt-pcm-sidecars",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "windows/audio-capture-core/src/session/composite.rs"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "6cfd0d1d72ed",
+  "token_usage": {
+    "input_tokens": 18,
+    "cache_creation_tokens": 57900,
+    "cache_read_tokens": 333187,
+    "output_tokens": 1869,
+    "api_call_count": 14
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-16T00:18:36.127118Z",
+    "agent_lines": 3,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 3,
+    "agent_percentage": 100
+  }
+}
