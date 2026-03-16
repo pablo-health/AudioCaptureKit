@@ -241,7 +241,7 @@ extension CompositeCaptureSession: AudioCaptureSession {
         processingQueue.sync {}
         await processBuffers()
 
-        return try await finalizeRecording()
+        return try finalizeRecording()
     }
 
     // MARK: - Capture Setup Helpers
