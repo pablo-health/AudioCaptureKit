@@ -1,1 +1,0 @@
-{"default":{"identifier":"default","description":"Default capability for the sample app","local":true,"windows":["main"],"permissions":["core:default",{"identifier":"shell:allow-open","allow":[{"url":"^https?://.*"},{"url":"^[a-zA-Z]:\\\\.*"},{"url":"^/.*"}]}]}}

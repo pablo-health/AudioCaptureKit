@@ -23,7 +23,6 @@ jobs:
       pull-requests: read
     outputs:
       swift: ${{ github.event_name == 'push' || steps.filter.outputs.swift }}
-      rust: ${{ github.event_name == 'push' || steps.filter.outputs.rust }}
       csharp: ${{ github.event_name == 'push' || steps.filter.outputs.csharp }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -35,11 +34,9 @@ jobs:
               - 'macOS/**'
               - 'Package.swift'
               - 'Package.resolved'
-            rust:
-              - 'archive/audio-capture-core/**'
-              - 'archive/audio-capture-windows/**'
             csharp:
               - 'csharp/**'
+              - 'Examples/windows/**'
 
   swift-lint:
     name: Swift Lint
@@ -92,81 +89,6 @@ jobs:
 
       - name: Test
         run: swift test
-
-  rust-lint:
-    name: Rust Lint (Linux)
-    needs: changes
-    if: needs.changes.outputs.rust == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy, rustfmt
-
-      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2
-        with:
-          workspaces: "archive -> archive/target"
-
-      - name: Check formatting
-        working-directory: archive
-        run: cargo fmt --all --check
-
-      - name: Clippy (core — platform-agnostic)
-        run: >
-          cargo clippy --manifest-path archive/Cargo.toml
-          -p audio-capture-core
-          -- -D warnings -W clippy::undocumented_unsafe_blocks
-
-  rust-clippy-windows:
-    name: Rust Clippy (Windows)
-    needs: changes
-    if: needs.changes.outputs.rust == 'true'
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
-
-      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2
-        with:
-          workspaces: "archive -> archive/target"
-
-      - name: Clippy (windows crate)
-        run: >
-          cargo clippy --manifest-path archive/Cargo.toml
-          -p audio-capture-windows
-          -- -D warnings
-
-  rust-test:
-    name: Rust Test (${{ matrix.package }})
-    needs: changes
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - package: audio-capture-core
-            os: ubuntu-latest
-          - package: audio-capture-windows
-            os: windows-latest
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - uses: dtolnay/rust-toolchain@stable
-        if: needs.changes.outputs.rust == 'true'
-
-      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2
-        if: needs.changes.outputs.rust == 'true'
-        with:
-          workspaces: "archive -> archive/target"
-
-      - name: Test
-        if: needs.changes.outputs.rust == 'true'
-        run: cargo test --manifest-path archive/Cargo.toml -p ${{ matrix.package }}
 
   csharp-build-test:
     name: C# Build & Test

@@ -1,0 +1,341 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="SampleApp.Views.MainPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:converters="using:SampleApp.Converters"
+    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+
+    <Page.Resources>
+        <converters:BoolToVisibilityConverter x:Key="BoolToVis" />
+    </Page.Resources>
+
+    <Grid Padding="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,16">
+            <TextBlock Text="Audio Capture" Style="{StaticResource TitleTextBlockStyle}" />
+            <TextBlock Text="Mic + system audio recording demo"
+                       Style="{StaticResource CaptionTextBlockStyle}"
+                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+        </StackPanel>
+
+        <!-- Error Banner -->
+        <InfoBar x:Name="ErrorBanner"
+                 Grid.Row="1"
+                 Severity="Error"
+                 IsOpen="False"
+                 IsClosable="True"
+                 Margin="0,0,0,8" />
+
+        <!-- Tab Content -->
+        <Pivot Grid.Row="2">
+            <!-- Recorder Tab -->
+            <PivotItem Header="Recorder">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Spacing="24" Padding="0,16,0,0">
+                        <!-- Recording Controls -->
+                        <StackPanel HorizontalAlignment="Center" Spacing="16">
+
+                            <!-- State Label -->
+                            <TextBlock x:Name="StateLabel"
+                                       Text="Ready"
+                                       HorizontalAlignment="Center"
+                                       Style="{StaticResource SubtitleTextBlockStyle}" />
+
+                            <!-- Level Meters + Duration -->
+                            <Grid HorizontalAlignment="Center" ColumnSpacing="32">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <!-- Mic Level Meter -->
+                                <StackPanel Grid.Column="0" Spacing="4" HorizontalAlignment="Center">
+                                    <Border Width="16" Height="128"
+                                            Background="{ThemeResource ControlStrongFillColorDefaultBrush}"
+                                            CornerRadius="4"
+                                            VerticalAlignment="Bottom">
+                                        <Border x:Name="MicMeterFill"
+                                                Background="#4CAF50"
+                                                CornerRadius="4"
+                                                VerticalAlignment="Bottom"
+                                                Height="0" />
+                                    </Border>
+                                    <TextBlock Text="Mic" FontSize="10"
+                                               HorizontalAlignment="Center"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                </StackPanel>
+
+                                <!-- Duration -->
+                                <TextBlock x:Name="DurationText"
+                                           Grid.Column="1"
+                                           Text="00:00"
+                                           FontSize="48"
+                                           FontWeight="SemiBold"
+                                           FontFamily="Consolas"
+                                           VerticalAlignment="Center" />
+
+                                <!-- System Level Meter -->
+                                <StackPanel Grid.Column="2" Spacing="4" HorizontalAlignment="Center">
+                                    <Border Width="16" Height="128"
+                                            Background="{ThemeResource ControlStrongFillColorDefaultBrush}"
+                                            CornerRadius="4"
+                                            VerticalAlignment="Bottom">
+                                        <Border x:Name="SystemMeterFill"
+                                                Background="#2196F3"
+                                                CornerRadius="4"
+                                                VerticalAlignment="Bottom"
+                                                Height="0" />
+                                    </Border>
+                                    <TextBlock Text="Sys" FontSize="10"
+                                               HorizontalAlignment="Center"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                </StackPanel>
+                            </Grid>
+
+                            <!-- Debug Level Values -->
+                            <TextBlock x:Name="LevelDebugText"
+                                       FontSize="10"
+                                       FontFamily="Consolas"
+                                       HorizontalAlignment="Center"
+                                       Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                       Visibility="Collapsed" />
+
+                            <!-- Control Buttons -->
+                            <StackPanel x:Name="ButtonPanel"
+                                        Orientation="Horizontal"
+                                        HorizontalAlignment="Center"
+                                        Spacing="8">
+                                <Button x:Name="RecordButton"
+                                        Content="Record"
+                                        Style="{StaticResource AccentButtonStyle}"
+                                        Click="OnRecordClick"
+                                        MinWidth="120" />
+                                <Button x:Name="PauseButton"
+                                        Content="Pause"
+                                        Click="OnPauseClick"
+                                        Visibility="Collapsed"
+                                        MinWidth="100" />
+                                <Button x:Name="ResumeButton"
+                                        Content="Resume"
+                                        Click="OnResumeClick"
+                                        Visibility="Collapsed"
+                                        MinWidth="100" />
+                                <Button x:Name="StopButton"
+                                        Content="Stop"
+                                        Click="OnStopClick"
+                                        Visibility="Collapsed"
+                                        MinWidth="100">
+                                    <Button.Resources>
+                                        <SolidColorBrush x:Key="ButtonBackground" Color="#C45B4A" />
+                                        <SolidColorBrush x:Key="ButtonForeground" Color="White" />
+                                        <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#D46B5A" />
+                                        <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="White" />
+                                    </Button.Resources>
+                                </Button>
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!-- Recording List -->
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Recordings"
+                                       Style="{StaticResource SubtitleTextBlockStyle}" />
+
+                            <TextBlock x:Name="EmptyListText"
+                                       Text="No recordings yet. Click Record to start."
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       HorizontalAlignment="Center"
+                                       Margin="0,16,0,16" />
+
+                            <ListView x:Name="RecordingsList"
+                                      SelectionMode="None"
+                                      Visibility="Collapsed">
+                                <ListView.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Padding="4,8" ColumnSpacing="12">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+
+                                            <!-- Play Button -->
+                                            <Button Grid.Column="0"
+                                                    Content="&#xE768;"
+                                                    FontFamily="Segoe MDL2 Assets"
+                                                    Click="OnPlayClick"
+                                                    Background="Transparent"
+                                                    BorderBrush="Transparent"
+                                                    Padding="8" />
+
+                                            <!-- File Info -->
+                                            <StackPanel Grid.Column="1"
+                                                        VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding FileName}"
+                                                           TextTrimming="CharacterEllipsis" />
+                                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                                    <TextBlock Text="{Binding SizeBytes}"
+                                                               FontSize="11"
+                                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                               x:Name="SizeText" />
+                                                    <TextBlock Text="{Binding CreatedAt}"
+                                                               FontSize="11"
+                                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                                </StackPanel>
+                                            </StackPanel>
+
+                                            <!-- Encryption Badge -->
+                                            <Border Grid.Column="2"
+                                                    Visibility="{Binding IsEncrypted, Converter={StaticResource BoolToVis}}"
+                                                    Background="#1AD4922E"
+                                                    CornerRadius="4"
+                                                    Padding="8,2"
+                                                    VerticalAlignment="Center">
+                                                <TextBlock Text="&#xE72E; Encrypted"
+                                                           FontSize="11"
+                                                           Foreground="#D4922E" />
+                                            </Border>
+
+                                            <!-- Delete Button -->
+                                            <Button Grid.Column="3"
+                                                    Content="&#xE74D;"
+                                                    FontFamily="Segoe MDL2 Assets"
+                                                    Click="OnDeleteClick"
+                                                    Background="Transparent"
+                                                    BorderBrush="Transparent"
+                                                    Padding="8" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListView.ItemTemplate>
+                            </ListView>
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </PivotItem>
+
+            <!-- Settings Tab -->
+            <PivotItem Header="Settings">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Spacing="16" Padding="0,16,0,0" MaxWidth="500">
+
+                        <!-- Microphone -->
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Microphone" FontWeight="SemiBold" />
+                            <ComboBox x:Name="MicDropdown"
+                                      HorizontalAlignment="Stretch"
+                                      PlaceholderText="System Default"
+                                      SelectionChanged="OnMicSelectionChanged" />
+                        </StackPanel>
+
+                        <!-- Audio Format (Read-Only) -->
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Audio Format" FontWeight="SemiBold" />
+                            <Grid ColumnSpacing="16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="Sample Rate" FontSize="11"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                    <TextBlock Text="48 kHz" FontWeight="SemiBold" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="1">
+                                    <TextBlock Text="Bit Depth" FontSize="11"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                    <TextBlock Text="16-bit" FontWeight="SemiBold" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Text="Channels" FontSize="11"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                    <TextBlock Text="Stereo" FontWeight="SemiBold" />
+                                </StackPanel>
+                            </Grid>
+                        </StackPanel>
+
+                        <!-- Mixing Strategy -->
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Mixing Strategy" FontWeight="SemiBold" />
+                            <ComboBox x:Name="MixingDropdown"
+                                      HorizontalAlignment="Stretch"
+                                      SelectedIndex="0"
+                                      SelectionChanged="OnMixingChanged">
+                                <ComboBoxItem Content="Blended (default)" Tag="Blended" />
+                                <ComboBoxItem Content="Separated (diarization)" Tag="Separated" />
+                            </ComboBox>
+                            <TextBlock x:Name="MixingDescription"
+                                       Text="L = mic + system_L, R = mic + system_R"
+                                       FontSize="11"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        </StackPanel>
+
+                        <!-- Export Raw PCM -->
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="Export Raw PCM" FontWeight="SemiBold" />
+                                <TextBlock Text="Write unencrypted _mic.pcm and _system.pcm sidecars"
+                                           FontSize="11"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            </StackPanel>
+                            <ToggleSwitch x:Name="RawPcmToggle" Grid.Column="1"
+                                          Toggled="OnRawPcmToggled" />
+                        </Grid>
+
+                        <!-- Encryption -->
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="Encryption" FontWeight="SemiBold" />
+                                <TextBlock Text="AES-256-GCM — demo key, not for production"
+                                           FontSize="11"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            </StackPanel>
+                            <ToggleSwitch x:Name="EncryptionToggle" Grid.Column="1"
+                                          Toggled="OnEncryptionToggled" />
+                        </Grid>
+
+                        <!-- Debug Toggles -->
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Debug" FontWeight="SemiBold" />
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Microphone capture" VerticalAlignment="Center" />
+                                <ToggleSwitch x:Name="MicToggle" Grid.Column="1"
+                                              IsOn="True" Toggled="OnMicToggled" />
+                            </Grid>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="System audio capture" VerticalAlignment="Center" />
+                                <ToggleSwitch x:Name="SystemToggle" Grid.Column="1"
+                                              IsOn="True" Toggled="OnSystemToggled" />
+                            </Grid>
+                        </StackPanel>
+
+                    </StackPanel>
+                </ScrollViewer>
+            </PivotItem>
+        </Pivot>
+    </Grid>
+</Page>
