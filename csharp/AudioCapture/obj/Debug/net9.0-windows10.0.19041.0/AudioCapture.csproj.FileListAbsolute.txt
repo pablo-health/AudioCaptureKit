@@ -1,0 +1,13 @@
+C:\Users\kurtn\developer\AudioCaptureKit\csharp\AudioCapture\obj\Debug\net9.0-windows10.0.19041.0\AudioCapture.csproj.AssemblyReference.cache
+C:\Users\kurtn\developer\AudioCaptureKit\csharp\AudioCapture\obj\Debug\net9.0-windows10.0.19041.0\AudioCapture.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\kurtn\developer\AudioCaptureKit\csharp\AudioCapture\obj\Debug\net9.0-windows10.0.19041.0\AudioCapture.AssemblyInfoInputs.cache
+C:\Users\kurtn\developer\AudioCaptureKit\csharp\AudioCapture\obj\Debug\net9.0-windows10.0.19041.0\AudioCapture.AssemblyInfo.cs
+C:\Users\kurtn\developer\AudioCaptureKit\csharp\AudioCapture\obj\Debug\net9.0-windows10.0.19041.0\AudioCapture.csproj.CoreCompileInputs.cache
+C:\Users\kurtn\developer\AudioCaptureKit\csharp\AudioCapture\obj\Debug\net9.0-windows10.0.19041.0\AudioCapture.sourcelink.json
+C:\Users\kurtn\developer\AudioCaptureKit\csharp\AudioCapture\bin\Debug\net9.0-windows10.0.19041.0\AudioCapture.deps.json
+C:\Users\kurtn\developer\AudioCaptureKit\csharp\AudioCapture\bin\Debug\net9.0-windows10.0.19041.0\AudioCapture.dll
+C:\Users\kurtn\developer\AudioCaptureKit\csharp\AudioCapture\bin\Debug\net9.0-windows10.0.19041.0\AudioCapture.pdb
+C:\Users\kurtn\developer\AudioCaptureKit\csharp\AudioCapture\obj\Debug\net9.0-windows10.0.19041.0\AudioCapture.dll
+C:\Users\kurtn\developer\AudioCaptureKit\csharp\AudioCapture\obj\Debug\net9.0-windows10.0.19041.0\refint\AudioCapture.dll
+C:\Users\kurtn\developer\AudioCaptureKit\csharp\AudioCapture\obj\Debug\net9.0-windows10.0.19041.0\AudioCapture.pdb
+C:\Users\kurtn\developer\AudioCaptureKit\csharp\AudioCapture\obj\Debug\net9.0-windows10.0.19041.0\ref\AudioCapture.dll
