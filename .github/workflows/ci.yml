@@ -24,7 +24,7 @@ jobs:
     outputs:
       swift: ${{ github.event_name == 'push' || steps.filter.outputs.swift }}
       rust: ${{ github.event_name == 'push' || steps.filter.outputs.rust }}
-      sample-app: ${{ github.event_name == 'push' || steps.filter.outputs.sample-app }}
+      csharp: ${{ github.event_name == 'push' || steps.filter.outputs.csharp }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
@@ -36,11 +36,10 @@ jobs:
               - 'Package.swift'
               - 'Package.resolved'
             rust:
-              - 'windows/**'
-              - 'Examples/windows/SampleApp/src-tauri/**'
-            sample-app:
-              - 'Examples/windows/SampleApp/**'
-              - '!Examples/windows/SampleApp/src-tauri/**'
+              - 'archive/audio-capture-core/**'
+              - 'archive/audio-capture-windows/**'
+            csharp:
+              - 'csharp/**'
 
   swift-lint:
     name: Swift Lint
@@ -108,15 +107,15 @@ jobs:
 
       - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2
         with:
-          workspaces: "windows -> windows/target"
+          workspaces: "archive -> archive/target"
 
       - name: Check formatting
-        working-directory: windows
+        working-directory: archive
         run: cargo fmt --all --check
 
       - name: Clippy (core — platform-agnostic)
         run: >
-          cargo clippy --manifest-path windows/Cargo.toml
+          cargo clippy --manifest-path archive/Cargo.toml
           -p audio-capture-core
           -- -D warnings -W clippy::undocumented_unsafe_blocks
 
@@ -134,21 +133,17 @@ jobs:
 
       - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2
         with:
-          workspaces: "windows -> windows/target"
+          workspaces: "archive -> archive/target"
 
       - name: Clippy (windows crate)
         run: >
-          cargo clippy --manifest-path windows/Cargo.toml
+          cargo clippy --manifest-path archive/Cargo.toml
           -p audio-capture-windows
           -- -D warnings
 
   rust-test:
     name: Rust Test (${{ matrix.package }})
     needs: changes
-    # No job-level if: matrix jobs must always run so each expanded name
-    # (e.g. "Rust Test (audio-capture-core)") is individually reported to
-    # GitHub. A job-level if causes GitHub to report only the unexpanded
-    # template name, which never satisfies the required status checks.
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -167,37 +162,49 @@ jobs:
       - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2
         if: needs.changes.outputs.rust == 'true'
         with:
-          workspaces: "windows -> windows/target"
+          workspaces: "archive -> archive/target"
 
       - name: Test
         if: needs.changes.outputs.rust == 'true'
-        run: cargo test --manifest-path windows/Cargo.toml -p ${{ matrix.package }}
+        run: cargo test --manifest-path archive/Cargo.toml -p ${{ matrix.package }}
 
-  sample-app-lint:
-    name: Sample App Lint
+  csharp-build-test:
+    name: C# Build & Test
     needs: changes
-    if: needs.changes.outputs.sample-app == 'true'
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: Examples/windows/SampleApp
+    if: needs.changes.outputs.csharp == 'true'
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
+      - name: Setup .NET
+        uses: actions/setup-dotnet@87b7050bc53ea08284295505d98d2aa94301e852 # v4
         with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: Examples/windows/SampleApp/package-lock.json
+          dotnet-version: 9.0.x
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Restore
+        run: dotnet restore csharp/AudioCapture.Tests/AudioCapture.Tests.csproj
 
-      - name: TypeScript type check
-        run: npx tsc --noEmit
+      - name: Build
+        run: dotnet build csharp/AudioCapture.Tests/AudioCapture.Tests.csproj -c Release --no-restore
 
-      - name: npm audit
-        run: npm audit --audit-level=high
+      - name: Test
+        run: dotnet test csharp/AudioCapture.Tests/AudioCapture.Tests.csproj -c Release --no-build --verbosity normal
+
+  csharp-format:
+    name: C# Format Check
+    needs: changes
+    if: needs.changes.outputs.csharp == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@87b7050bc53ea08284295505d98d2aa94301e852 # v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Check formatting
+        run: dotnet format csharp/AudioCapture/AudioCapture.csproj --verify-no-changes --verbosity diagnostic
 
   dependency-review:
     name: Dependency Review
