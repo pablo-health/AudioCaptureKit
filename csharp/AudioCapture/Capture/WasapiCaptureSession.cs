@@ -208,7 +208,7 @@ public sealed class WasapiCaptureSession : ICaptureSession
         }
     }
 
-    public async Task<RecordingResult> StopCaptureAsync()
+    public Task<RecordingResult> StopCaptureAsync()
     {
         lock (_lock)
         {
@@ -296,7 +296,7 @@ public sealed class WasapiCaptureSession : ICaptureSession
         Delegate?.OnCaptureFinished(result);
         _stopTcs?.TrySetResult(result);
 
-        return result;
+        return Task.FromResult(result);
     }
 
     public Task<AudioSource[]> GetAvailableAudioSourcesAsync() =>
