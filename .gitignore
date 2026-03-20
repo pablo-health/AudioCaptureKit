@@ -26,6 +26,10 @@ DerivedData/
 .Spotlight-V100
 .Trashes
 
+# C# / .NET
+**/bin/
+**/obj/
+
 # Rust
 windows/target/
 **/src-tauri/target/
