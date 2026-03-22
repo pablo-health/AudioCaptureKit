@@ -108,18 +108,6 @@ class MyDelegate: AudioCaptureDelegate {
 
 > **Threading:** This callback fires on an unspecified background queue. Implementations must be non-blocking. Dispatch heavy work asynchronously.
 
-### Rust
-
-```rust
-session.set_channel_buffer_callback(Arc::new(|buffers: &ChannelBuffers| {
-    // mic_samples: mono f32 slice
-    // system_samples: interleaved stereo [L0, R0, L1, R1, ...]
-    let _mic = &buffers.mic_samples;
-    let _system = &buffers.system_samples;
-    // Non-blocking: spawn a thread or send to a channel
-}));
-```
-
 ---
 
 ## Raw PCM Sidecar Files
@@ -141,9 +129,9 @@ This produces two additional files:
 | `{name}_mic.pcm` | Signed 16-bit LE, no header, mono | Microphone channel only |
 | `{name}_system.pcm` | Signed 16-bit LE, no header, interleaved stereo | System audio, full stereo |
 
-The PCM sidecar files are **never encrypted**, even when the WAV file is encrypted.
+When an encryptor is configured, PCM sidecar files are encrypted with the same chunk-based format as the main WAV file and use a `.enc.pcm` extension. When no encryptor is configured, PCM files are written as raw unencrypted PCM.
 
-Their paths are available in `RecordingResult.rawPCMFileURLs` (Swift) / `RecordingResult.raw_pcm_file_paths` (Rust):
+Their paths are available in `RecordingResult.rawPCMFileURLs` (Swift) / `RecordingResult.RawPcmFilePaths` (C#):
 - Index 0: mic PCM
 - Index 1: system PCM
 
@@ -179,11 +167,12 @@ public enum MixingStrategy: Sendable, Codable {
 }
 ```
 
-### Rust
+### C\#
 
-```rust
-pub enum MixingStrategy {
-    Blended,    // default
+```csharp
+public enum MixingStrategy
+{
+    Blended,       // default
     Separated,
     Multichannel,
 }

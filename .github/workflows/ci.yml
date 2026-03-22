@@ -76,16 +76,18 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Cache SPM dependencies
+        id: spm-cache
         uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5
         with:
           path: |
             .build
             ~/Library/Caches/org.swift.swiftpm
-          key: spm-${{ runner.os }}-${{ hashFiles('Package.resolved') }}
+          key: spm-${{ runner.os }}-${{ hashFiles('Package.swift', 'Package.resolved') }}
           restore-keys: spm-${{ runner.os }}-
 
-      - name: Resolve packages
-        run: swift package resolve
+      - name: Clean stale build artifacts
+        if: steps.spm-cache.outputs.cache-hit != 'true'
+        run: swift package clean
 
       - name: Build
         run: swift build
