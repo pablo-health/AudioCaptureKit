@@ -101,7 +101,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@87b7050bc53ea08284295505d98d2aa94301e852 # v4
         with:
-          dotnet-version: 9.0.x
+          dotnet-version: 10.0.x
 
       - name: Restore
         run: dotnet restore csharp/AudioCapture.Tests/AudioCapture.Tests.csproj
@@ -123,7 +123,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@87b7050bc53ea08284295505d98d2aa94301e852 # v4
         with:
-          dotnet-version: 9.0.x
+          dotnet-version: 10.0.x
 
       - name: Check formatting
         run: dotnet format csharp/AudioCapture/AudioCapture.csproj --verify-no-changes --verbosity diagnostic
