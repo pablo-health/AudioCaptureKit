@@ -340,7 +340,7 @@ extension CompositeCaptureSession {
             return $0.rawPCMFileURLs
         }
 
-        let result = buildRecordingResult(checksum: checksum, rawPCMFileURLs: rawPCMURLs)
+        let result = try buildRecordingResult(checksum: checksum, rawPCMFileURLs: rawPCMURLs)
         setState(.completed(result))
 
         let delegate = sessionState.withLock { $0.delegate }
@@ -348,10 +348,12 @@ extension CompositeCaptureSession {
         return result
     }
 
-    private func buildRecordingResult(checksum: String, rawPCMFileURLs: [URL] = []) -> RecordingResult {
+    private func buildRecordingResult(checksum: String, rawPCMFileURLs: [URL] = []) throws -> RecordingResult {
         let duration = elapsedDuration()
         let config = configuration
-        let fileURL: URL = sessionState.withLock { $0.fileURL! }
+        guard let fileURL: URL = sessionState.withLock({ $0.fileURL }) else {
+            throw CaptureError.storageError("Recording file URL unavailable")
+        }
 
         let (tracks, channelLayout): ([AudioTrack], ChannelLayout)
         switch config.mixingStrategy {
