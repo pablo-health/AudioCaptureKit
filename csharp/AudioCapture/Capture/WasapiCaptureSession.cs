@@ -44,6 +44,9 @@ public sealed class WasapiCaptureSession : ICaptureSession
     private Timer? _maxDurationTimer;
     private Timer? _mixTimer;
 
+    // File path for the main WAV recording (set in StartCaptureAsync)
+    private string? _wavFilePath;
+
     // Level metering
     private float _micRms;
     private float _systemRms;
@@ -121,6 +124,7 @@ public sealed class WasapiCaptureSession : ICaptureSession
         var filePath = Path.Combine(config.OutputDirectory, $"recording_{timestamp}{ext}");
 
         // Open WAV writer
+        _wavFilePath = filePath;
         _wavWriter = new EncryptedWavWriter(filePath, config.Encryptor);
         _wavWriter.Open(config);
 
@@ -243,9 +247,7 @@ public sealed class WasapiCaptureSession : ICaptureSession
 
         var config = _config!;
         var duration = _durationStopwatch.Elapsed;
-        var filePath = _wavWriter != null
-            ? GetFilePath()
-            : "";
+        var filePath = _wavFilePath ?? "";
 
         // Build tracks
         var tracks = new List<AudioTrack>();
@@ -317,16 +319,6 @@ public sealed class WasapiCaptureSession : ICaptureSession
     }
 
     // --- Private helpers ---
-
-    private string GetFilePath()
-    {
-        var config = _config!;
-        // Reconstruct from output directory — the writer knows the actual path
-        var files = Directory.GetFiles(config.OutputDirectory, "recording_*.*")
-            .OrderByDescending(File.GetCreationTime)
-            .ToArray();
-        return files.Length > 0 ? files[0] : config.OutputDirectory;
-    }
 
     private void OnMicDataAvailable(object? sender, WaveInEventArgs e)
     {
