@@ -5,7 +5,7 @@
 | Platform | Version | Supported |
 |----------|---------|-----------|
 | macOS (Swift) | latest main | ✅ |
-| Windows (Rust) | latest main | ✅ |
+| Windows (C#) | latest main | ✅ |
 
 ## Reporting a Vulnerability
 
@@ -17,7 +17,7 @@ Instead, please report it through [GitHub's private vulnerability reporting](htt
 2. Click **"Report a vulnerability"**
 3. Fill in the details and submit
 
-If you are unable to use GitHub's reporting, you may email [security@lll-solutions.com](mailto:security@lll-solutions.com) with the subject line "AudioCaptureKit Vulnerability Disclosure".
+If you are unable to use GitHub's reporting, you may email [security@pablo.health](mailto:security@pablo.health) with the subject line "AudioCaptureKit Vulnerability Disclosure".
 
 ### Response Timeline
 
@@ -48,6 +48,6 @@ This project handles sensitive audio data and follows these security practices:
 
 - **Encryption**: All captured audio is encrypted with AES-256-GCM before reaching disk. No plaintext audio is stored.
 - **HIPAA-aware logging**: `print()` is forbidden in production code; all logging uses `os.log` / `Logger` with appropriate privacy levels.
-- **Dependency scanning**: Automated via [Trivy](https://github.com/aquasecurity/trivy), cargo audit, cargo deny, npm audit, and [Dependabot](https://github.com/pablo-health/AudioCaptureKit/security/dependabot).
-- **Static analysis**: SwiftLint (strict mode), Clippy (deny warnings), [CodeQL](https://github.com/pablo-health/AudioCaptureKit/security/code-scanning), and Trivy misconfiguration scanning.
+- **Dependency scanning**: Automated via [Trivy](https://github.com/aquasecurity/trivy), npm audit, and [Dependabot](https://github.com/pablo-health/AudioCaptureKit/security/dependabot).
+- **Static analysis**: SwiftLint (strict mode), [CodeQL](https://github.com/pablo-health/AudioCaptureKit/security/code-scanning), and Trivy misconfiguration scanning.
 - **CI enforcement**: All security checks run on every PR and on a weekly schedule.

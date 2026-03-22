@@ -1,6 +1,6 @@
 # API Reference
 
-AudioCaptureKit provides a symmetric API across macOS (Swift) and Windows (Rust). Both platforms share the same concepts: a session manages capture, providers supply audio, and an encrypted writer handles storage.
+AudioCaptureKit provides a symmetric API across macOS (Swift) and Windows (C#). Both platforms share the same concepts: a session manages capture, providers supply audio, and an encrypted writer handles storage.
 
 ## Quick Start
 
@@ -24,27 +24,25 @@ try await session.startCapture()
 let result = try await session.stopCapture()
 ```
 
-### Windows (Rust)
+### Windows (C#)
 
-```rust
-use audio_capture_core::{CaptureConfiguration, CompositeSession};
-use audio_capture_windows::{WasapiMicCapture, WasapiLoopbackCapture};
+```csharp
+using AudioCapture.Capture;
+using AudioCapture.Models;
 
-let config = CaptureConfiguration {
-    sample_rate: 48000.0,
-    bit_depth: 16,
-    channels: 2,
-    output_directory: std::env::temp_dir(),
-    ..Default::default()
+var config = new CaptureConfiguration
+{
+    SampleRate = 48000,
+    BitDepth = 16,
+    Channels = 2,
+    OutputDirectory = Path.GetTempPath()
 };
-let mut session = CompositeSession::new(
-    WasapiMicCapture::new(),
-    WasapiLoopbackCapture::new(),
-);
-session.configure(config)?;
-session.start_capture()?;
+var session = new WasapiCaptureSession();
+session.Configure(config);
+
+var result = await session.StartCaptureAsync();
 // ...
-let result = session.stop_capture()?;
+var recording = await session.StopCaptureAsync();
 ```
 
 ---
@@ -53,31 +51,31 @@ let result = session.stop_capture()?;
 
 The main entry point for audio capture.
 
-### Protocol / Trait
+### Protocol / Interface
 
-| Swift | Rust |
-|-------|------|
-| `AudioCaptureSession` protocol | `CaptureSession` trait |
+| Swift | C# |
+|-------|-----|
+| `AudioCaptureSession` protocol | `ICaptureSession` interface |
 
 ### Implementation
 
-| Swift | Rust |
-|-------|------|
-| `CompositeCaptureSession` | `CompositeSession<M, S>` |
+| Swift | C# |
+|-------|-----|
+| `CompositeCaptureSession` | `WasapiCaptureSession` |
 
 ### Methods
 
-| Operation | Swift | Rust |
-|-----------|-------|------|
-| Configure | `configure(_ config: CaptureConfiguration) throws` | `configure(&mut self, config: CaptureConfiguration) -> Result<()>` |
-| Start | `startCapture() async throws` | `start_capture(&mut self) -> Result<()>` |
-| Pause | `pauseCapture() throws` | `pause_capture(&mut self) -> Result<()>` |
-| Resume | `resumeCapture() throws` | `resume_capture(&mut self) -> Result<()>` |
-| Stop | `stopCapture() async throws -> RecordingResult` | `stop_capture(&mut self) -> Result<RecordingResult>` |
-| State | `var state: CaptureState { get }` | `fn state(&self) -> CaptureState` |
-| Levels | `var currentLevels: AudioLevels { get }` | `fn current_levels(&self) -> AudioLevels` |
-| Sources | `availableAudioSources() async throws -> [AudioSource]` | `fn available_audio_sources(&self) -> Result<Vec<AudioSource>>` |
-| Diagnostics | `var diagnostics: CaptureSessionDiagnostics { get }` | `fn diagnostics(&self) -> CaptureSessionDiagnostics` |
+| Operation | Swift | C# |
+|-----------|-------|-----|
+| Configure | `configure(_ config: CaptureConfiguration) throws` | `Configure(CaptureConfiguration configuration)` |
+| Start | `startCapture() async throws` | `StartCaptureAsync() -> Task<RecordingResult>` |
+| Pause | `pauseCapture() throws` | `PauseCapture()` |
+| Resume | `resumeCapture() throws` | `ResumeCapture()` |
+| Stop | `stopCapture() async throws -> RecordingResult` | `StopCaptureAsync() -> Task<RecordingResult>` |
+| State | `var state: CaptureState { get }` | `CaptureState State { get; }` |
+| Levels | `var currentLevels: AudioLevels { get }` | `AudioLevels CurrentLevels { get; }` |
+| Sources | `availableAudioSources() async throws -> [AudioSource]` | `GetAvailableAudioSourcesAsync() -> Task<AudioSource[]>` |
+| Diagnostics | `var diagnostics: CaptureSessionDiagnostics { get }` | — |
 
 ---
 
@@ -85,26 +83,26 @@ The main entry point for audio capture.
 
 ### CaptureConfiguration
 
-| Property | Swift | Rust | Default |
-|----------|-------|------|---------|
-| Sample rate | `sampleRate: Double` | `sample_rate: f64` | 48000 |
-| Bit depth | `bitDepth: Int` | `bit_depth: u16` | 16 |
-| Channels | `channels: Int` | `channels: u16` | 2 |
-| Output directory | `outputDirectory: URL` | `output_directory: PathBuf` | required |
-| Encryptor | `encryptor: (any CaptureEncryptor)?` | `encryptor: Option<Box<dyn CaptureEncryptor>>` | nil/None |
-| Max duration | `maxDuration: TimeInterval?` | `max_duration_secs: Option<f64>` | nil/None |
-| Mic device | `micDeviceID: String?` | `mic_device_id: Option<String>` | nil/None (default device) |
-| Enable mic | `enableMicCapture: Bool` | `enable_mic_capture: bool` | true |
-| Enable system | `enableSystemCapture: Bool` | `enable_system_capture: bool` | true |
+| Property | Swift | C# | Default |
+|----------|-------|-----|---------|
+| Sample rate | `sampleRate: Double` | `SampleRate: double` | 48000 |
+| Bit depth | `bitDepth: Int` | `BitDepth: int` | 16 |
+| Channels | `channels: Int` | `Channels: int` | 2 |
+| Output directory | `outputDirectory: URL` | `OutputDirectory: string` | required |
+| Encryptor | `encryptor: (any CaptureEncryptor)?` | `Encryptor: ICaptureEncryptor?` | nil/null |
+| Max duration | `maxDuration: TimeInterval?` | `MaxDuration: TimeSpan?` | nil/null |
+| Mic device | `micDeviceID: String?` | `MicDeviceId: string?` | nil/null (default device) |
+| Enable mic | `enableMicCapture: Bool` | `EnableMicCapture: bool` | true |
+| Enable system | `enableSystemCapture: Bool` | `EnableSystemCapture: bool` | true |
 
 Valid bit depths: 16, 24, 32.
 
 Valid channel counts: 1–4. Channels 3–4 are reserved for future multi-mic support; the mixer currently produces 2-channel output regardless.
 
-| Property | Swift | Rust | Default |
-|----------|-------|------|---------|
-| Mixing strategy | `mixingStrategy: MixingStrategy` | `mixing_strategy: MixingStrategy` | `.blended` / `Blended` |
-| Export raw PCM | `exportRawPCM: Bool` | `export_raw_pcm: bool` | false |
+| Property | Swift | C# | Default |
+|----------|-------|-----|---------|
+| Mixing strategy | `mixingStrategy: MixingStrategy` | `MixingStrategy: MixingStrategy` | `.blended` / `Blended` |
+| Export raw PCM | `exportRawPCM: Bool` | `ExportRawPcm: bool` | false |
 
 See [DIARIZATION.md](DIARIZATION.md) for full mixing strategy documentation.
 
@@ -120,38 +118,38 @@ idle → configuring → ready → capturing ↔ paused → stopping → complet
 
 ### CaptureState
 
-| State | Swift | Rust |
-|-------|-------|------|
+| State | Swift | C# |
+|-------|-------|-----|
 | Idle | `.idle` | `Idle` |
 | Configuring | `.configuring` | `Configuring` |
 | Ready | `.ready` | `Ready` |
-| Capturing | `.capturing(duration: TimeInterval)` | `Capturing { duration_secs: f64 }` |
-| Paused | `.paused(duration: TimeInterval)` | `Paused { duration_secs: f64 }` |
+| Capturing | `.capturing(duration: TimeInterval)` | `Capturing` |
+| Paused | `.paused(duration: TimeInterval)` | `Paused` |
 | Stopping | `.stopping` | `Stopping` |
-| Completed | `.completed(RecordingResult)` | `Completed(Box<RecordingResult>)` |
-| Failed | `.failed(CaptureError)` | `Failed(CaptureError)` |
+| Completed | `.completed(RecordingResult)` | `Completed` |
+| Failed | `.failed(CaptureError)` | `Failed` |
 
 ---
 
 ## Delegate / Callbacks
 
-### Protocol / Trait
+### Protocol / Interface
 
-| Swift | Rust |
-|-------|------|
-| `AudioCaptureDelegate` protocol | `CaptureDelegate` trait |
+| Swift | C# |
+|-------|-----|
+| `AudioCaptureDelegate` protocol | `ICaptureDelegate` interface |
 
 ### Callbacks
 
-| Event | Swift | Rust |
-|-------|-------|------|
-| State changed | `captureSession(_:didChangeState:)` | `on_state_changed(&self, state: &CaptureState)` |
-| Levels updated | `captureSession(_:didUpdateLevels:)` | `on_levels_updated(&self, levels: &AudioLevels)` |
-| Error | `captureSession(_:didEncounterError:)` | `on_error(&self, error: &CaptureError)` |
-| Finished | `captureSession(_:didFinishCapture:)` | `on_capture_finished(&self, result: &RecordingResult)` |
-| Channel buffers | `captureSession(_:didProduceChannelBuffers:)` | `set_channel_buffer_callback(cb: ChannelBufferCallback)` |
+| Event | Swift | C# |
+|-------|-------|-----|
+| State changed | `captureSession(_:didChangeState:)` | `OnStateChanged(CaptureState state)` |
+| Levels updated | `captureSession(_:didUpdateLevels:)` | `OnLevelsUpdated(AudioLevels levels)` |
+| Error | `captureSession(_:didEncounterError:)` | `OnError(CaptureException error)` |
+| Finished | `captureSession(_:didFinishCapture:)` | `OnCaptureFinished(RecordingResult result)` |
+| Channel buffers | `captureSession(_:didProduceChannelBuffers:)` | — |
 
-The `didProduceChannelBuffers` callback (Swift) / `ChannelBufferCallback` (Rust) fires on every processing cycle (~100 ms) with raw per-channel audio before mixing. Has a default no-op implementation in Swift so existing delegates compile unchanged. See [DIARIZATION.md](DIARIZATION.md) for usage examples.
+The `didProduceChannelBuffers` callback (Swift) fires on every processing cycle (~100 ms) with raw per-channel audio before mixing. Has a default no-op implementation so existing delegates compile unchanged. See [DIARIZATION.md](DIARIZATION.md) for usage examples.
 
 ---
 
@@ -159,26 +157,18 @@ The `didProduceChannelBuffers` callback (Swift) / `ChannelBufferCallback` (Rust)
 
 Swappable audio sources that feed into the session.
 
-### Protocol / Trait
+### Protocol / Interface
 
-| Swift | Rust |
-|-------|------|
-| `AudioCaptureProvider` protocol | `CaptureProvider` trait |
+| Swift | C# |
+|-------|-----|
+| `AudioCaptureProvider` protocol | `ICaptureSession` (unified) |
 
 ### Built-in Providers
 
-| Source | Swift | Rust |
-|--------|-------|------|
-| Microphone | `AVFoundationMicCapture` | `WasapiMicCapture` |
-| System audio | `CoreAudioTapCapture` | `WasapiLoopbackCapture` |
-
-### Methods
-
-| Operation | Swift | Rust |
-|-----------|-------|------|
-| Check availability | `var isAvailable: Bool` | `fn is_available(&self) -> bool` |
-| Start | `start(bufferCallback:) async throws` | `fn start(&mut self, callback: AudioBufferCallback) -> Result<()>` |
-| Stop | `stop() async` | `fn stop(&mut self) -> Result<()>` |
+| Source | Swift | C# |
+|--------|-------|-----|
+| Microphone | `AVFoundationMicCapture` | `WasapiCaptureSession` (NAudio WasapiCapture) |
+| System audio | `CoreAudioTapCapture` | `WasapiCaptureSession` (NAudio WasapiLoopbackCapture) |
 
 ---
 
@@ -186,29 +176,29 @@ Swappable audio sources that feed into the session.
 
 All encryption uses AES-256-GCM with streaming chunk-per-nonce. The WAV header is written unencrypted; audio chunks are encrypted with a length prefix.
 
-### Protocol / Trait
+### Protocol / Interface
 
-| Swift | Rust |
-|-------|------|
-| `CaptureEncryptor` protocol | `CaptureEncryptor` trait |
+| Swift | C# |
+|-------|-----|
+| `CaptureEncryptor` protocol | `ICaptureEncryptor` interface |
 
 ### Methods
 
-| Operation | Swift | Rust |
-|-----------|-------|------|
-| Encrypt | `encrypt(_ data: Data) throws -> Data` | `fn encrypt(&self, data: &[u8]) -> Result<Vec<u8>>` |
-| Metadata | `keyMetadata() -> [String: String]` | `fn key_metadata(&self) -> HashMap<String, String>` |
-| Algorithm | `var algorithm: String` | `fn algorithm(&self) -> &str` |
+| Operation | Swift | C# |
+|-----------|-------|-----|
+| Encrypt | `encrypt(_ data: Data) throws -> Data` | `Encrypt(byte[] data) -> byte[]` |
+| Metadata | `keyMetadata() -> [String: String]` | `KeyMetadata -> Dictionary<string, string>` |
+| Algorithm | `var algorithm: String` | `Algorithm -> string` |
 
-### EncryptedFileWriter
+### EncryptedFileWriter / EncryptedWavWriter
 
-| Operation | Swift | Rust |
-|-----------|-------|------|
-| Create | `init(fileURL:encryptor:)` | `fn new(file_path, encryptor) -> Self` |
-| Open | `open(configuration:) throws` | `fn open(&mut self, config) -> Result<()>` |
-| Write | `write(_ data: Data) throws` | `fn write(&mut self, data: &[u8]) -> Result<()>` |
-| Close | `close(actualSampleRate:channels:bitDepth:) throws -> String` | `fn close(&mut self, actual_sample_rate, channels, bit_depth) -> Result<String>` |
-| Bytes written | `var bytesWritten: UInt64` | `fn bytes_written(&self) -> u64` |
+| Operation | Swift | C# |
+|-----------|-------|-----|
+| Create | `init(fileURL:encryptor:)` | `new EncryptedWavWriter(filePath, encryptor)` |
+| Open | `open(configuration:) throws` | `Open(configuration)` |
+| Write | `write(_ data: Data) throws` | `Write(byte[] data)` |
+| Close | `close(actualSampleRate:channels:bitDepth:) throws -> String` | `Close(sampleRate, channels, bitDepth) -> string` |
+| Bytes written | `var bytesWritten: UInt64` | `BytesWritten -> long` |
 
 ---
 
@@ -218,43 +208,43 @@ All encryption uses AES-256-GCM with streaming chunk-per-nonce. The WAV header i
 
 Returned by `stopCapture()`.
 
-| Property | Swift | Rust |
-|----------|-------|------|
-| File location | `fileURL: URL` | `file_path: PathBuf` |
-| Duration | `duration: TimeInterval` | `duration_secs: f64` |
-| Metadata | `metadata: RecordingMetadata` | `metadata: RecordingMetadata` |
-| Checksum | `checksum: String` | `checksum: String` |
-| Raw PCM files | `rawPCMFileURLs: [URL]` | `raw_pcm_file_paths: Vec<PathBuf>` |
+| Property | Swift | C# |
+|----------|-------|-----|
+| File location | `fileURL: URL` | `FilePath: string` |
+| Duration | `duration: TimeInterval` | `Duration: TimeSpan` |
+| Metadata | `metadata: RecordingMetadata` | `Metadata: RecordingMetadata` |
+| Checksum | `checksum: String` | `Checksum: string` |
+| Raw PCM files | `rawPCMFileURLs: [URL]` | `RawPcmFilePaths: string[]` |
 
-`rawPCMFileURLs` / `raw_pcm_file_paths` is empty unless `exportRawPCM` was enabled. When populated: index 0 = mic (mono), index 1 = system (stereo interleaved).
+`rawPCMFileURLs` / `RawPcmFilePaths` is empty unless `exportRawPCM` was enabled. When populated: index 0 = mic (mono), index 1 = system (stereo interleaved).
 
 ### ChannelBuffers
 
 Raw per-channel audio from one processing cycle. Delivered via the channel buffers callback before mixing.
 
-| Property | Swift | Rust |
-|----------|-------|------|
-| Mic audio | `micSamples: [Float]` | `mic_samples: Vec<f32>` |
-| System audio | `systemSamples: [Float]` | `system_samples: Vec<f32>` |
-| Sample rate | `sampleRate: Double` | `sample_rate: f64` |
-| Timestamp | `timestamp: Date` | `timestamp_unix_secs: f64` |
+| Property | Swift |
+|----------|-------|
+| Mic audio | `micSamples: [Float]` |
+| System audio | `systemSamples: [Float]` |
+| Sample rate | `sampleRate: Double` |
+| Timestamp | `timestamp: Date` |
 
-`systemSamples` / `system_samples` is always full interleaved stereo `[L0, R0, L1, R1, ...]`. The library never folds it to mono.
+`systemSamples` is always full interleaved stereo `[L0, R0, L1, R1, ...]`. The library never folds it to mono.
 
 ### ChannelLayout
 
 Records the actual WAV channel layout in `RecordingMetadata`. Old recordings without this field decode as `blended`.
 
-| Value | Swift | Rust | Meaning |
-|-------|-------|------|---------|
+| Value | Swift | C# | Meaning |
+|-------|-------|-----|---------|
 | Blended | `.blended` | `Blended` | Mic mixed into both channels |
 | Separated stereo | `.separatedStereo` | `SeparatedStereo` | Ch1 = mic, Ch2 = system mono-fold |
 | Mono | `.mono` | `Mono` | Single mono channel |
 
 ### MixingStrategy
 
-| Value | Swift | Rust | WAV layout |
-|-------|-------|------|-----------|
+| Value | Swift | C# | WAV layout |
+|-------|-------|-----|-----------|
 | Blended (default) | `.blended` | `Blended` | mic+sysL / mic+sysR |
 | Separated | `.separated` | `Separated` | mic only / system (L+R)/2 |
 | Multichannel | `.multichannel` | `Multichannel` | same as separated (reserved) |
@@ -263,45 +253,45 @@ Records the actual WAV channel layout in `RecordingMetadata`. Old recordings wit
 
 Real-time audio level metering.
 
-| Property | Swift | Rust |
-|----------|-------|------|
-| Mic level | `micLevel: Float` | `mic_level: f32` |
-| System level | `systemLevel: Float` | `system_level: f32` |
-| Peak mic | `peakMicLevel: Float` | `peak_mic_level: f32` |
-| Peak system | `peakSystemLevel: Float` | `peak_system_level: f32` |
+| Property | Swift | C# |
+|----------|-------|-----|
+| Mic level | `micLevel: Float` | `MicLevel: float` |
+| System level | `systemLevel: Float` | `SystemLevel: float` |
+| Peak mic | `peakMicLevel: Float` | `PeakMicLevel: float` |
+| Peak system | `peakSystemLevel: Float` | `PeakSystemLevel: float` |
 
 ### AudioSource
 
 Represents a discovered audio device.
 
-| Property | Swift | Rust |
-|----------|-------|------|
-| ID | `id: String` | `id: String` |
-| Name | `name: String` | `name: String` |
-| Type | `type: AudioTrackType` | `source_type: AudioTrackType` |
-| Default | `isDefault: Bool` | `is_default: bool` |
-| Transport | `transportType: AudioTransportType?` | `transport_type: Option<AudioTransportType>` |
+| Property | Swift | C# |
+|----------|-------|-----|
+| ID | `id: String` | `Id: string` |
+| Name | `name: String` | `Name: string` |
+| Type | `type: AudioTrackType` | `Type: AudioTrackType` |
+| Default | `isDefault: Bool` | `IsDefault: bool` |
+| Transport | `transportType: AudioTransportType?` | `TransportType: AudioTransportType?` |
 
 ### CaptureError
 
-| Variant | Swift | Rust |
-|---------|-------|------|
+| Variant | Swift | C# |
+|---------|-------|-----|
 | Permission denied | `.permissionDenied` | `PermissionDenied` |
 | Device unavailable | `.deviceNotAvailable` | `DeviceNotAvailable` |
-| Config failed | `.configurationFailed(String)` | `ConfigurationFailed(String)` |
-| Encoding failed | `.encodingFailed(String)` | `EncodingFailed(String)` |
-| Encryption failed | `.encryptionFailed(String)` | `EncryptionFailed(String)` |
-| Storage error | `.storageError(String)` | `StorageError(String)` |
+| Config failed | `.configurationFailed(String)` | `ConfigurationFailed(string)` |
+| Encoding failed | `.encodingFailed(String)` | `EncodingFailed(string)` |
+| Encryption failed | `.encryptionFailed(String)` | `EncryptionFailed(string)` |
+| Storage error | `.storageError(String)` | `StorageError(string)` |
 | Timeout | `.timeout` | `Timeout` |
-| Unknown | `.unknown(String)` | `Unknown(String)` |
+| Unknown | `.unknown(String)` | `Unknown(string)` |
 
 ### AudioTrack
 
-| Property | Swift | Rust | Notes |
-|----------|-------|------|-------|
-| Type | `type: AudioTrackType` | `track_type: AudioTrackType` | |
-| Channel | `channel: AudioChannel` | `channel: AudioChannel` | |
-| Label | `label: String?` | `label: Option<String>` | Omitted from JSON when nil |
+| Property | Swift | C# | Notes |
+|----------|-------|-----|-------|
+| Type | `type: AudioTrackType` | `Type: AudioTrackType` | |
+| Channel | `channel: AudioChannel` | `Channel: AudioChannel` | |
+| Label | `label: String?` | `Label: string?` | Omitted from JSON when nil |
 
 ### Enums
 

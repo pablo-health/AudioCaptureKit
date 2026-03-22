@@ -10,12 +10,10 @@ swift build          # Build the library
 swift test           # Run all tests (uses Apple Testing framework, not XCTest)
 ```
 
-### Windows (Rust 1.75+)
+### Windows (C# / .NET 10)
 ```bash
-cd windows
-cargo build --release
-cargo test           # Run all tests
-cargo clippy         # Lint
+dotnet build csharp/AudioCapture/AudioCapture.csproj -c Release
+dotnet test csharp/AudioCapture.Tests/AudioCapture.Tests.csproj
 ```
 
 ### Linting (macOS)
@@ -40,27 +38,22 @@ System Capture (stereo) ┘
 
 ### Platform Implementations
 
-| Concern | macOS (`macOS/Sources/AudioCaptureKit/`) | Windows (`windows/`) |
-|---------|------------------------------------------|----------------------|
-| Mic | `AVFoundationMicCapture` (AVFoundation) | `WasapiMicCapture` (WASAPI) |
-| System audio | `CoreAudioTapCapture` (Core Audio Taps, requires macOS 14.2+) | `WasapiLoopbackCapture` (WASAPI loopback) |
-| Session | `CompositeCaptureSession` (protocol: `AudioCaptureSession`) | `CompositeSession<M, S>` (trait: `CaptureSession`) |
-| Encryption | `EncryptedFileWriter` + `CaptureEncryptor` protocol | `EncryptedFileWriter` + `Encryptor` trait |
-| Concurrency | Actors, `UnfairLock`, structured concurrency | `parking_lot::Mutex`, threads |
-
-### Windows Crate Structure
-- **`audio-capture-core`** — Platform-agnostic: models, traits, mixer, ring buffer, encryption, WAV I/O
-- **`audio-capture-windows`** — Windows-specific: WASAPI capture providers, device enumeration, permissions
+| Concern | macOS (`macOS/Sources/AudioCaptureKit/`) | Windows (`csharp/AudioCapture/`) |
+|---------|------------------------------------------|----------------------------------|
+| Mic | `AVFoundationMicCapture` (AVFoundation) | `WasapiCaptureSession` (NAudio WasapiCapture) |
+| System audio | `CoreAudioTapCapture` (Core Audio Taps, requires macOS 14.2+) | `WasapiCaptureSession` (NAudio WasapiLoopbackCapture) |
+| Session | `CompositeCaptureSession` (protocol: `AudioCaptureSession`) | `WasapiCaptureSession` (interface: `ICaptureSession`) |
+| Encryption | `EncryptedFileWriter` + `CaptureEncryptor` protocol | `EncryptedWavWriter` + `ICaptureEncryptor` interface |
+| Concurrency | Actors, `UnfairLock`, structured concurrency | `lock`, `Task`, async/await |
 
 ### Key Design Patterns
 - **State machine**: `idle → configuring → ready → capturing ↔ paused → stopping → completed/failed`
 - **Encryption**: AES-256-GCM streaming, chunk-per-nonce. Unencrypted WAV header, encrypted audio chunks with length prefix. No plaintext audio on disk.
 - **Bluetooth HFP**: Mic capture does a 500ms probe to detect actual sample rate after HFP negotiation before starting real capture.
-- **Protocol/trait abstraction**: Capture providers are swappable via `AudioCaptureProvider` (Swift) / `CaptureProvider` (Rust).
+- **Protocol/interface abstraction**: Capture providers are swappable via `AudioCaptureProvider` (Swift) / `ICaptureSession` (C#).
 
 ## Code Style
 
-- UTF-8, LF line endings, 4-space indentation for Swift/Rust (see `.editorconfig`)
+- UTF-8, LF line endings, 4-space indentation for Swift/C# (see `.editorconfig`)
 - Swift: K&R braces, alphabetized imports, no explicit `self`, trailing commas always (see `macOS/.swiftformat`)
 - Swift 6 strict concurrency — all types crossing concurrency boundaries must be `Sendable`
-

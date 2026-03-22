@@ -10,7 +10,7 @@ Cross-platform audio capture library — microphone + system audio mixed into a 
 | Platform | Language | Audio API | Directory |
 |----------|----------|-----------|-----------|
 | macOS 14+ | Swift 6 | Core Audio Taps + AVFoundation | `macOS/` |
-| Windows 10+ | Rust 1.75+ | WASAPI | `windows/` |
+| Windows 10+ | C# / .NET 10 | WASAPI (via NAudio) | `csharp/` |
 
 ## Shared Architecture
 
@@ -83,54 +83,40 @@ See `macOS/` for source code and `Examples/macOS/` for the sample app.
 ### Requirements
 
 - Windows 10+
-- Rust 1.75+
+- .NET 10
 
 ### Building
 
 ```bash
-cd windows
-cargo build --release
+dotnet build csharp/AudioCapture/AudioCapture.csproj -c Release
+dotnet test csharp/AudioCapture.Tests/AudioCapture.Tests.csproj
 ```
-
-### Crate Structure
-
-| Crate | Purpose |
-|-------|---------|
-| `audio-capture-core` | Platform-agnostic models, traits, stereo mixer, encrypted writer |
-| `audio-capture-windows` | WASAPI mic capture, WASAPI loopback (system audio), device enumeration |
 
 ### Quick Start
 
-```rust
-use audio_capture_core::session::CompositeSession;
-use audio_capture_core::models::CaptureConfig;
-use audio_capture_windows::{WasapiMic, WasapiLoopback};
+```csharp
+using AudioCapture.Capture;
+using AudioCapture.Models;
 
-let config = CaptureConfig::new(48000, 16, 2);
-let session = CompositeSession::new(config);
+var config = new CaptureConfiguration
+{
+    SampleRate = 48000,
+    BitDepth = 16,
+    Channels = 2,
+    OutputDirectory = Path.GetTempPath()
+};
+var session = new WasapiCaptureSession();
+session.Configure(config);
 
-session.start()?;
+var result = await session.StartCaptureAsync();
 // ...
-let result = session.stop()?;
+var recording = await session.StopCaptureAsync();
 ```
 
-See `windows/` for source code.
-
-### Sample App (Tauri v2)
-
-A desktop GUI at `Examples/windows/SampleApp/` built with Tauri v2 (Rust backend + React frontend). Records mic + system audio, shows real-time level meters, lists recordings, and supports device selection and encryption toggle.
-
-**Prerequisites:** Node.js 18+, Rust 1.77+, Windows 10 SDK
-
-```bash
-cd Examples/windows/SampleApp
-npm install
-npm run tauri dev      # Dev mode with hot reload
-npm run tauri build    # Produces .exe + MSI installer in src-tauri/target/release/bundle/
-```
+See `csharp/` for source code.
 
 ## License
 
 This project is licensed under the [GNU Affero General Public License v3.0](LICENSE).
 
-For commercial licensing options, contact [kurtn@lll-solutions.com](mailto:kurtn@lll-solutions.com).
+For commercial licensing options, contact [kurtn@pablo.health](mailto:kurtn@pablo.health).
