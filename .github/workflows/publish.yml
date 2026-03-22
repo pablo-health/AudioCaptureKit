@@ -1,0 +1,39 @@
+name: Publish
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  publish-nuget:
+    name: Publish NuGet Package
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@87b7050bc53ea08284295505d98d2aa94301e852 # v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Extract version from tag
+        id: version
+        shell: bash
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Pack
+        run: >
+          dotnet pack csharp/AudioCapture/AudioCapture.csproj
+          -c Release
+          -p:PackageVersion=${{ steps.version.outputs.version }}
+          -o ./nupkg
+
+      - name: Push to NuGet
+        run: >
+          dotnet nuget push nupkg/*.nupkg
+          --api-key ${{ secrets.NUGET_API_KEY }}
+          --source https://api.nuget.org/v3/index.json
+          --skip-duplicate

@@ -319,13 +319,13 @@ extension CompositeCaptureSession: AudioCaptureSession {
         if fm.createFile(atPath: micURL.path, contents: nil) {
             handles.mic = FileHandle(forWritingAtPath: micURL.path)
         } else {
-            logger.warning("Failed to create mic PCM sidecar at \(micURL.path)")
+            logger.warning("Failed to create mic PCM sidecar: \(micURL.lastPathComponent)")
         }
 
         if fm.createFile(atPath: systemURL.path, contents: nil) {
             handles.system = FileHandle(forWritingAtPath: systemURL.path)
         } else {
-            logger.warning("Failed to create system PCM sidecar at \(systemURL.path)")
+            logger.warning("Failed to create system PCM sidecar: \(systemURL.lastPathComponent)")
         }
 
         sessionState.withLock {

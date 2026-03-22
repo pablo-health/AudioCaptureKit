@@ -57,7 +57,7 @@ public final class EncryptedFileWriter: @unchecked Sendable {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 
             guard FileManager.default.createFile(atPath: fileURL.path, contents: nil) else {
-                throw CaptureError.storageError("Failed to create file at \(fileURL.path)")
+                throw CaptureError.storageError("Failed to create file: \(fileURL.lastPathComponent)")
             }
 
             ws.fileHandle = try FileHandle(forWritingTo: fileURL)

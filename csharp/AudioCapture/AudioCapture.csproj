@@ -5,6 +5,12 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>preview</LangVersion>
     <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
+    <PackageId>AudioCaptureKit</PackageId>
+    <Description>Cross-platform audio capture — mic + system audio mixed into encrypted stereo WAV (AES-256-GCM)</Description>
+    <Authors>Pablo Health</Authors>
+    <PackageLicenseExpression>AGPL-3.0-only</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/pablo-health/AudioCaptureKit</RepositoryUrl>
+    <PackageTags>audio;capture;wasapi;encryption;hipaa</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>
