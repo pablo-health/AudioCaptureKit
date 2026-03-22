@@ -1,0 +1,36 @@
+{
+  "cli_version": "0.4.7",
+  "checkpoint_id": "715a526b4aa5",
+  "session_id": "79d5980d-b3fd-4684-b274-afab92979698",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-22T23:04:08.237889Z",
+  "branch": "chore/remove-swift-testing-spm-dep",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "macOS/Sources/AudioCaptureKit/Capture/CompositeCaptureSession.swift",
+    "macOS/Sources/AudioCaptureKit/Storage/EncryptedFileWriter.swift",
+    "macOS/Sources/AudioCaptureKit/Capture/CompositeCaptureSession+Processing.swift",
+    ".github/workflows/publish.yml",
+    "csharp/AudioCapture/AudioCapture.csproj"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "f4cf055b6631",
+  "checkpoint_transcript_start": 240,
+  "transcript_lines_at_start": 240,
+  "token_usage": {
+    "input_tokens": 29,
+    "cache_creation_tokens": 12659,
+    "cache_read_tokens": 2315454,
+    "output_tokens": 5236,
+    "api_call_count": 23
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-22T23:04:07.92567Z",
+    "agent_lines": 53,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 53,
+    "agent_percentage": 100
+  }
+}

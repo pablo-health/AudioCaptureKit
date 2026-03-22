@@ -1,0 +1,30 @@
+{
+  "cli_version": "0.4.7",
+  "checkpoint_id": "715a526b4aa5",
+  "strategy": "manual-commit",
+  "branch": "chore/remove-swift-testing-spm-dep",
+  "checkpoints_count": 0,
+  "files_touched": [
+    ".github/workflows/publish.yml",
+    "csharp/AudioCapture/AudioCapture.csproj",
+    "macOS/Sources/AudioCaptureKit/Capture/CompositeCaptureSession+Processing.swift",
+    "macOS/Sources/AudioCaptureKit/Capture/CompositeCaptureSession.swift",
+    "macOS/Sources/AudioCaptureKit/Storage/EncryptedFileWriter.swift"
+  ],
+  "sessions": [
+    {
+      "metadata": "/71/5a526b4aa5/0/metadata.json",
+      "transcript": "/71/5a526b4aa5/0/full.jsonl",
+      "context": "/71/5a526b4aa5/0/context.md",
+      "content_hash": "/71/5a526b4aa5/0/content_hash.txt",
+      "prompt": "/71/5a526b4aa5/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 29,
+    "cache_creation_tokens": 12659,
+    "cache_read_tokens": 2315454,
+    "output_tokens": 5236,
+    "api_call_count": 23
+  }
+}
