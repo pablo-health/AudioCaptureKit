@@ -125,18 +125,21 @@ public sealed class WasapiCaptureSession : ICaptureSession
         _wavWriter.Open(config);
 
         // Open raw PCM sidecar files if requested
+        // When encrypted, uses .enc.pcm extension with length-prefixed encrypted chunks
+        // matching the macOS Swift implementation (no plaintext PCM on disk).
         string? micPcmPath = null;
         string? systemPcmPath = null;
         if (config.ExportRawPcm)
         {
+            var pcmExt = config.Encryptor != null ? "enc.pcm" : "pcm";
             if (config.EnableMicCapture)
             {
-                micPcmPath = Path.Combine(config.OutputDirectory, $"recording_{timestamp}_mic.pcm");
+                micPcmPath = Path.Combine(config.OutputDirectory, $"recording_{timestamp}_mic.{pcmExt}");
                 _micPcmWriter = new FileStream(micPcmPath, FileMode.Create);
             }
             if (config.EnableSystemCapture)
             {
-                systemPcmPath = Path.Combine(config.OutputDirectory, $"recording_{timestamp}_system.pcm");
+                systemPcmPath = Path.Combine(config.OutputDirectory, $"recording_{timestamp}_system.{pcmExt}");
                 _systemPcmWriter = new FileStream(systemPcmPath, FileMode.Create);
             }
         }
@@ -258,10 +261,11 @@ public sealed class WasapiCaptureSession : ICaptureSession
         var rawPcmPaths = new List<string>();
         if (_config!.ExportRawPcm)
         {
+            var pcmExt = config.Encryptor != null ? "enc.pcm" : "pcm";
             var timestamp = Path.GetFileNameWithoutExtension(filePath)
                 .Replace("recording_", "").Replace(".enc", "");
-            var micPcm = Path.Combine(config.OutputDirectory, $"recording_{timestamp}_mic.pcm");
-            var sysPcm = Path.Combine(config.OutputDirectory, $"recording_{timestamp}_system.pcm");
+            var micPcm = Path.Combine(config.OutputDirectory, $"recording_{timestamp}_mic.{pcmExt}");
+            var sysPcm = Path.Combine(config.OutputDirectory, $"recording_{timestamp}_system.{pcmExt}");
             if (File.Exists(micPcm)) rawPcmPaths.Add(micPcm);
             if (File.Exists(sysPcm)) rawPcmPaths.Add(sysPcm);
         }
@@ -347,8 +351,8 @@ public sealed class WasapiCaptureSession : ICaptureSession
             _micBuffer.AddRange(samples);
         }
 
-        // Write raw PCM sidecar
-        _micPcmWriter?.Write(e.Buffer, 0, e.BytesRecorded);
+        // Write raw PCM sidecar (encrypted if encryptor configured)
+        WritePcmSidecar(_micPcmWriter, e.Buffer, e.BytesRecorded);
     }
 
     private void OnSystemDataAvailable(object? sender, WaveInEventArgs e)
@@ -401,12 +405,11 @@ public sealed class WasapiCaptureSession : ICaptureSession
             _systemBuffer.AddRange(samples);
         }
 
-        // Write raw PCM sidecar (as float32 bytes)
+        // Write raw PCM sidecar as i16 LE (matching macOS format), encrypted if configured
         if (_systemPcmWriter != null)
         {
-            var bytes = new byte[samples.Length * 4];
-            Buffer.BlockCopy(samples, 0, bytes, 0, bytes.Length);
-            _systemPcmWriter.Write(bytes, 0, bytes.Length);
+            var pcmBytes = ConvertFloatToInt16Pcm(samples);
+            WritePcmSidecar(_systemPcmWriter, pcmBytes, pcmBytes.Length);
         }
     }
 
@@ -504,5 +507,49 @@ public sealed class WasapiCaptureSession : ICaptureSession
         foreach (var s in samples)
             sum += s * s;
         return MathF.Sqrt(sum / samples.Length);
+    }
+
+    /// <summary>
+    /// Writes a PCM chunk to a sidecar file. When an encryptor is configured,
+    /// writes encrypted chunks in the same length-prefixed format as the main WAV:
+    /// [4-byte LE length][nonce|ciphertext|tag]. This matches the macOS Swift implementation.
+    /// </summary>
+    private void WritePcmSidecar(FileStream? writer, byte[] data, int count)
+    {
+        if (writer == null) return;
+
+        if (_config?.Encryptor != null)
+        {
+            var chunk = new byte[count];
+            Buffer.BlockCopy(data, 0, chunk, 0, count);
+            var encrypted = _config.Encryptor.Encrypt(chunk);
+            var lengthBytes = BitConverter.GetBytes((uint)encrypted.Length);
+            if (!BitConverter.IsLittleEndian)
+                Array.Reverse(lengthBytes);
+            writer.Write(lengthBytes, 0, 4);
+            writer.Write(encrypted, 0, encrypted.Length);
+        }
+        else
+        {
+            writer.Write(data, 0, count);
+        }
+    }
+
+    /// <summary>
+    /// Converts float32 samples to signed 16-bit LE PCM bytes.
+    /// Used to write system audio sidecars in the same i16 format as mic sidecars,
+    /// matching the macOS implementation (convertToInt16PCM).
+    /// </summary>
+    private static byte[] ConvertFloatToInt16Pcm(float[] samples)
+    {
+        var bytes = new byte[samples.Length * 2];
+        for (int i = 0; i < samples.Length; i++)
+        {
+            var clamped = Math.Clamp(samples[i], -1.0f, 1.0f);
+            short value = (short)(clamped * short.MaxValue);
+            bytes[i * 2] = (byte)(value & 0xFF);
+            bytes[i * 2 + 1] = (byte)((value >> 8) & 0xFF);
+        }
+        return bytes;
     }
 }
