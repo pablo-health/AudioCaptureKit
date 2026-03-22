@@ -1,0 +1,31 @@
+{
+  "cli_version": "0.4.7",
+  "checkpoint_id": "788746f8c8bf",
+  "strategy": "manual-commit",
+  "branch": "chore/remove-swift-testing-spm-dep",
+  "checkpoints_count": 0,
+  "files_touched": [
+    ".github/workflows/ci.yml",
+    "CLAUDE.md",
+    "README.md",
+    "SECURITY.md",
+    "docs/API.md",
+    "docs/DIARIZATION.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/78/8746f8c8bf/0/metadata.json",
+      "transcript": "/78/8746f8c8bf/0/full.jsonl",
+      "context": "/78/8746f8c8bf/0/context.md",
+      "content_hash": "/78/8746f8c8bf/0/content_hash.txt",
+      "prompt": "/78/8746f8c8bf/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 46,
+    "cache_creation_tokens": 86787,
+    "cache_read_tokens": 2523682,
+    "output_tokens": 19186,
+    "api_call_count": 42
+  }
+}
