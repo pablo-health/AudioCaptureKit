@@ -13,8 +13,7 @@ let package = Package(
         )
     ],
     dependencies: [
-        .package(url: "https://github.com/apple/swift-crypto.git", from: "4.0.0"),
-        .package(url: "https://github.com/apple/swift-testing.git", from: "6.0.0")
+        .package(url: "https://github.com/apple/swift-crypto.git", from: "4.0.0")
     ],
     targets: [
         .target(
@@ -27,8 +26,7 @@ let package = Package(
         .testTarget(
             name: "AudioCaptureKitTests",
             dependencies: [
-                "AudioCaptureKit",
-                .product(name: "Testing", package: "swift-testing")
+                "AudioCaptureKit"
             ],
             path: "macOS/Tests/AudioCaptureKitTests"
         )
