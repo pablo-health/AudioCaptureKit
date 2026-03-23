@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.4.7",
+  "checkpoint_id": "5d8614470e87",
+  "strategy": "manual-commit",
+  "branch": "chore/remove-swift-testing-spm-dep",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "csharp/AudioCapture/AudioCapture.csproj"
+  ],
+  "sessions": [
+    {
+      "metadata": "/5d/8614470e87/0/metadata.json",
+      "transcript": "/5d/8614470e87/0/full.jsonl",
+      "context": "/5d/8614470e87/0/context.md",
+      "content_hash": "/5d/8614470e87/0/content_hash.txt",
+      "prompt": "/5d/8614470e87/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 13,
+    "cache_creation_tokens": 101496,
+    "cache_read_tokens": 644620,
+    "output_tokens": 1079,
+    "api_call_count": 7
+  }
+}
