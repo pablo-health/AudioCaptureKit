@@ -5,7 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>preview</LangVersion>
     <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
-    <PackageId>AudioCaptureKit</PackageId>
+    <PackageId>PabloHealth.AudioCaptureKit</PackageId>
     <Description>Cross-platform audio capture — mic + system audio mixed into encrypted stereo WAV (AES-256-GCM)</Description>
     <Authors>Pablo Health</Authors>
     <PackageLicenseExpression>AGPL-3.0-only</PackageLicenseExpression>
