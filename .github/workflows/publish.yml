@@ -33,7 +33,7 @@ jobs:
 
       - name: Push to NuGet
         run: >
-          dotnet nuget push nupkg/*.nupkg
+          dotnet nuget push nupkg\PabloHealth.AudioCaptureKit.${{ steps.version.outputs.version }}.nupkg
           --api-key ${{ secrets.NUGET_API_KEY }}
           --source https://api.nuget.org/v3/index.json
           --skip-duplicate
