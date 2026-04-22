@@ -148,3 +148,23 @@ jobs:
         with:
           fail-on-severity: high
           deny-licenses: GPL-2.0, GPL-3.0, AGPL-3.0
+
+  windows-ci:
+    name: Windows CI
+    needs: [changes, csharp-build-test, csharp-format]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify Windows CI result
+        run: |
+          changed="${{ needs.changes.outputs.csharp }}"
+          build="${{ needs.csharp-build-test.result }}"
+          fmt="${{ needs.csharp-format.result }}"
+          echo "csharp changed: $changed"
+          echo "csharp-build-test result: $build"
+          echo "csharp-format result: $fmt"
+          if [ "$changed" = "true" ] && { [ "$build" != "success" ] || [ "$fmt" != "success" ]; }; then
+            echo "::error::C# code changed and required jobs did not succeed (build=$build, format=$fmt)"
+            exit 1
+          fi
+          echo "Gate passed"
