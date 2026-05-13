@@ -54,7 +54,7 @@ jobs:
           restore-keys: spm-${{ runner.os }}-
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@e46ed2cbd01164d986452f91f178727624ae40d7 # v4
+        uses: github/codeql-action/init@68bde559dea0fdcac2102bfdf6230c5f70eb485e # v4
         with:
           languages: swift
           queries: security-extended
@@ -63,7 +63,7 @@ jobs:
         run: swift build
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@e46ed2cbd01164d986452f91f178727624ae40d7 # v4
+        uses: github/codeql-action/analyze@68bde559dea0fdcac2102bfdf6230c5f70eb485e # v4
         with:
           category: /language:swift
 
@@ -81,7 +81,7 @@ jobs:
           dotnet-version: 9.0.x
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@e46ed2cbd01164d986452f91f178727624ae40d7 # v4
+        uses: github/codeql-action/init@68bde559dea0fdcac2102bfdf6230c5f70eb485e # v4
         with:
           languages: csharp
           queries: security-extended
@@ -90,6 +90,6 @@ jobs:
         run: dotnet build csharp/AudioCapture/AudioCapture.csproj -c Release
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@e46ed2cbd01164d986452f91f178727624ae40d7 # v4
+        uses: github/codeql-action/analyze@68bde559dea0fdcac2102bfdf6230c5f70eb485e # v4
         with:
           category: /language:csharp
