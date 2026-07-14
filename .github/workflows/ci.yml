@@ -77,7 +77,7 @@ jobs:
 
       - name: Cache SPM dependencies
         id: spm-cache
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
         with:
           path: |
             .build
@@ -104,7 +104,7 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@87b7050bc53ea08284295505d98d2aa94301e852 # v4
+        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v4
         with:
           dotnet-version: 10.0.x
 
@@ -126,7 +126,7 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@87b7050bc53ea08284295505d98d2aa94301e852 # v4
+        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v4
         with:
           dotnet-version: 10.0.x
 
@@ -144,7 +144,27 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-      - uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48 # v4
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v4
         with:
           fail-on-severity: high
           deny-licenses: GPL-2.0, GPL-3.0, AGPL-3.0
+
+  windows-ci:
+    name: Windows CI
+    needs: [changes, csharp-build-test, csharp-format]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify Windows CI result
+        run: |
+          changed="${{ needs.changes.outputs.csharp }}"
+          build="${{ needs.csharp-build-test.result }}"
+          fmt="${{ needs.csharp-format.result }}"
+          echo "csharp changed: $changed"
+          echo "csharp-build-test result: $build"
+          echo "csharp-format result: $fmt"
+          if [ "$changed" = "true" ] && { [ "$build" != "success" ] || [ "$fmt" != "success" ]; }; then
+            echo "::error::C# code changed and required jobs did not succeed (build=$build, format=$fmt)"
+            exit 1
+          fi
+          echo "Gate passed"
