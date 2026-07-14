@@ -13,6 +13,8 @@ public final class AudioBufferManager: @unchecked Sendable {
         var writeIndex = 0
         var readIndex = 0
         var availableSamples = 0
+        /// Cumulative count of oldest samples dropped because the buffer was full.
+        var overflowSampleCount = 0
         let capacity: Int
 
         init(capacity: Int) {
@@ -22,6 +24,11 @@ public final class AudioBufferManager: @unchecked Sendable {
     }
 
     private let state: UnfairLock<State>
+
+    /// Optional callback invoked when a write overflows the buffer, with the
+    /// number of oldest samples dropped in that write. Called synchronously on
+    /// the writing (audio) thread — keep it cheap.
+    public var onOverflow: (@Sendable (Int) -> Void)?
 
     private let logger = Logger(
         subsystem: "com.audiocapturekit",
@@ -40,15 +47,18 @@ public final class AudioBufferManager: @unchecked Sendable {
     /// - Parameter samples: The audio samples to write.
     public func write(_ samples: [Float]) {
         let count = samples.count
-        state.withLock { st in
+        let dropped: Int = state.withLock { st in
             let capacity = st.capacity
 
             let samplesToWrite: ArraySlice<Float>
+            let truncated: Int
             if count > capacity {
                 logger.warning("Write size \(count) exceeds buffer capacity \(capacity), truncating")
                 samplesToWrite = samples.suffix(capacity)
+                truncated = count - capacity
             } else {
                 samplesToWrite = samples[...]
+                truncated = 0
             }
 
             let overflow = (st.availableSamples + samplesToWrite.count) - capacity
@@ -63,7 +73,14 @@ public final class AudioBufferManager: @unchecked Sendable {
                 st.writeIndex = (st.writeIndex + 1) % capacity
             }
             st.availableSamples += samplesToWrite.count
+
+            // Both truncated-on-input and overwritten-oldest samples are lost audio.
+            let lost = max(0, overflow) + truncated
+            st.overflowSampleCount += lost
+            return lost
         }
+
+        if dropped > 0 { onOverflow?(dropped) }
     }
 
     /// Reads and removes up to the specified number of samples from the buffer.
@@ -87,6 +104,12 @@ public final class AudioBufferManager: @unchecked Sendable {
     /// The number of samples currently available for reading.
     public var count: Int {
         state.withLock { $0.availableSamples }
+    }
+
+    /// Cumulative number of samples dropped due to overflow since creation.
+    /// Zero on a healthy pipeline; any non-zero value means audio was lost.
+    public var overflowCount: Int {
+        state.withLock { $0.overflowSampleCount }
     }
 
     /// Whether the buffer is empty.

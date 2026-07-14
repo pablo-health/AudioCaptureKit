@@ -1,6 +1,5 @@
 import AVFoundation
 import CoreAudio
-import Crypto
 import Foundation
 import os
 
@@ -41,8 +40,8 @@ public final class CompositeCaptureSession: @unchecked Sendable {
 
     let sessionState: UnfairLock<SessionState>
 
-    let micCapture: AVFoundationMicCapture
-    let systemCapture: CoreAudioTapCapture
+    let micCapture: any AudioCaptureProvider
+    let systemCapture: any AudioCaptureProvider
     var stereoMixer: StereoMixer
 
     var fileWriter: EncryptedFileWriter?
@@ -72,11 +71,19 @@ public final class CompositeCaptureSession: @unchecked Sendable {
     )
 
     /// Creates a new composite capture session.
-    /// - Parameter configuration: Initial configuration. Can be updated via ``configure(_:)``.
-    public init(configuration: CaptureConfiguration) {
+    ///
+    /// `micSource`/`systemSource` default to the live hardware captures, so
+    /// existing call sites are unchanged. Inject a ``FilePlayerCaptureSource``
+    /// (or any ``AudioCaptureProvider``) to drive the pipeline from a fixture
+    /// instead of hardware, without capture permissions.
+    public init(
+        configuration: CaptureConfiguration,
+        micSource: (any AudioCaptureProvider)? = nil,
+        systemSource: (any AudioCaptureProvider)? = nil
+    ) {
         self.sessionState = UnfairLock(SessionState(configuration: configuration))
-        self.micCapture = AVFoundationMicCapture(deviceID: configuration.micDeviceID)
-        self.systemCapture = CoreAudioTapCapture()
+        self.micCapture = micSource ?? AVFoundationMicCapture(deviceID: configuration.micDeviceID)
+        self.systemCapture = systemSource ?? CoreAudioTapCapture()
         self.stereoMixer = StereoMixer(targetSampleRate: configuration.sampleRate)
     }
 
@@ -134,7 +141,15 @@ extension CompositeCaptureSession: AudioCaptureSession {
 
     /// Live diagnostic counters for debugging the capture pipeline.
     public var diagnostics: CaptureSessionDiagnostics {
-        sessionState.withLock { $0.diagnostics }
+        // Overflow counts live on the ring buffers (own locks); fold them in.
+        let micOverflow = micBuffer?.overflowCount ?? 0
+        let systemOverflow = systemBuffer?.overflowCount ?? 0
+        return sessionState.withLock {
+            var snapshot = $0.diagnostics
+            snapshot.micOverflowSamples = micOverflow
+            snapshot.systemOverflowSamples = systemOverflow
+            return snapshot
+        }
     }
 
     public func configure(_ configuration: CaptureConfiguration) throws {

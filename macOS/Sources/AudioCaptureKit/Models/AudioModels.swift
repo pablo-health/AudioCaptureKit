@@ -190,6 +190,12 @@ public struct CaptureSessionDiagnostics: Sendable {
     public var bytesWritten = 0
     /// Number of processBuffers cycles that produced output.
     public var mixCycles = 0
+    /// Cumulative mic samples dropped because the mic ring buffer overflowed.
+    /// Zero on a healthy pipeline; any non-zero value means mic audio was lost.
+    public var micOverflowSamples = 0
+    /// Cumulative system samples dropped because the system ring buffer overflowed.
+    /// Zero on a healthy pipeline; any non-zero value means system audio was lost.
+    public var systemOverflowSamples = 0
 
     public init() {}
 }
