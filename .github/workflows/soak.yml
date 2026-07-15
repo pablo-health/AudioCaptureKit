@@ -1,9 +1,12 @@
 name: Soak
 
-# Long-running buffer-reliability soak: drives the real capture graph from
-# looped file sources for ~50 minutes of wall-clock real time and asserts the
-# ring buffer never overflows or stalls. Too slow for the PR gate (which runs a
-# ~20s version of the same test), so it runs weekly and on demand.
+# Long-running buffer-reliability soak: drives the real capture graph for
+# ~50 minutes of wall-clock real time from both looped file sources
+# (CaptureSoakTests) and a deterministic marker-tone generator
+# (SignalGeneratorSoakTests), asserting the ring buffer never overflows or
+# stalls, channel separation and marker timing hold, pause/resume recovers
+# cleanly, and memory stays bounded. Too slow for the PR gate (which runs a
+# ~20s version of the same tests), so it runs weekly and on demand.
 
 on:
   schedule:
@@ -50,4 +53,4 @@ jobs:
           SOAK_SECONDS: ${{ github.event.inputs.soak_seconds || '3000' }}
         run: |
           echo "Running capture soak for ${SOAK_SECONDS}s of real-time capture"
-          swift test --filter CaptureSoakTests
+          swift test --filter Soak
