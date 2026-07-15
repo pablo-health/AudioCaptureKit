@@ -50,6 +50,66 @@ public class WasapiCaptureSessionInjectionTests : IDisposable
     }
 
     [Fact]
+    public async Task SystemEndpointAtADifferentRate_IsReconciledToTheConfiguredRate()
+    {
+        // A 44.1 kHz render device is ordinary, and its rate is the device's choice,
+        // not ours. The sidecar is stamped with the *configured* rate regardless, so
+        // an unreconciled endpoint yields audio that plays ~9% fast.
+        //
+        // Both sidecars are driven by the same wall clock, so their sizes are
+        // comparable without depending on how long the test actually ran: mic is
+        // 48 kHz mono, system is 48 kHz stereo, so system should be ~2x mic. An
+        // un-normalized 44.1 kHz system channel lands at ~1.84x instead.
+        var micFixture = WriteFixture("mic.wav", channels: 1, seconds: 0.3);
+        var systemFixture = WriteFixture("system.wav", channels: 2, seconds: 0.3);
+
+        using var session = new WasapiCaptureSession(
+            () => FileWaveIn.Mono16(micFixture, loop: true),
+            () => FileWaveIn.StereoFloat(systemFixture, sampleRate: 44100, loop: true));
+
+        session.Configure(DefaultConfig with { ExportRawPcm = true });
+
+        var capture = session.StartCaptureAsync();
+        await Task.Delay(TimeSpan.FromSeconds(1.5));
+        var result = await session.StopCaptureAsync();
+        await capture;
+
+        var diagnostics = session.Diagnostics;
+        Assert.Equal(44100, diagnostics.SystemSourceSampleRate);
+        Assert.True(diagnostics.SystemNormalized, "a 44.1 kHz endpoint must be reconciled");
+
+        var micBytes = new FileInfo(result.RawPcmFilePaths[0]).Length;
+        var systemBytes = new FileInfo(result.RawPcmFilePaths[1]).Length;
+        var ratio = (double)systemBytes / micBytes;
+
+        // Tight enough to separate 2.0 from the 1.84 an unreconciled endpoint gives.
+        Assert.InRange(ratio, 1.9, 2.1);
+    }
+
+    [Fact]
+    public async Task SystemEndpointAtTheConfiguredRate_IsLeftAlone()
+    {
+        var micFixture = WriteFixture("mic.wav", channels: 1, seconds: 0.3);
+        var systemFixture = WriteFixture("system.wav", channels: 2, seconds: 0.3);
+
+        using var session = new WasapiCaptureSession(
+            () => FileWaveIn.Mono16(micFixture, loop: true),
+            () => FileWaveIn.StereoFloat(systemFixture, loop: true));
+
+        session.Configure(DefaultConfig);
+
+        var capture = session.StartCaptureAsync();
+        await Task.Delay(TimeSpan.FromSeconds(0.5));
+        await session.StopCaptureAsync();
+        await capture;
+
+        var diagnostics = session.Diagnostics;
+        Assert.Equal(48000, diagnostics.SystemSourceSampleRate);
+        Assert.Equal(2, diagnostics.SystemSourceChannels);
+        Assert.False(diagnostics.SystemNormalized, "a matching endpoint should not be resampled");
+    }
+
+    [Fact]
     public void Configure_WithInjectedMic_NeverResolvesADevice()
     {
         var fixture = WriteFixture("mic.wav");

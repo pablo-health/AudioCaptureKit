@@ -54,6 +54,10 @@ public sealed class WasapiCaptureSession : ICaptureSession
     // Mixer
     private readonly StereoMixer _mixer = new();
 
+    // Reconciles the loopback endpoint's mix format to the configured shape.
+    // Built once the source's format is known; owned by the capture callback.
+    private SystemAudioNormalizer? _systemNormalizer;
+
     // Buffers for mixing (protected by _lock)
     private readonly List<float> _micBuffer = [];
     private readonly List<float> _systemBuffer = [];
@@ -133,6 +137,9 @@ public sealed class WasapiCaptureSession : ICaptureSession
                     SystemBytes = _systemBytes,
                     MixErrors = _mixErrors,
                     PeakBufferedSamples = _peakBufferedSamples,
+                    SystemSourceSampleRate = _systemNormalizer?.SourceSampleRate ?? 0,
+                    SystemSourceChannels = _systemNormalizer?.SourceChannels ?? 0,
+                    SystemNormalized = _systemNormalizer is { IsPassthrough: false },
                 };
             }
         }
@@ -240,6 +247,14 @@ public sealed class WasapiCaptureSession : ICaptureSession
         if (config.EnableSystemCapture)
         {
             _systemCapture = _systemFactory?.Invoke() ?? new WasapiLoopbackCapture();
+
+            // Built before the first callback can fire: the endpoint's format is
+            // only knowable now, and OnSystemDataAvailable relies on this being set.
+            _systemNormalizer = new SystemAudioNormalizer(
+                _systemCapture.WaveFormat.SampleRate,
+                _systemCapture.WaveFormat.Channels,
+                (int)config.SampleRate);
+
             _systemCapture.DataAvailable += OnSystemDataAvailable;
             _systemCapture.RecordingStopped += OnSystemRecordingStopped;
             _systemCapture.StartRecording();
@@ -449,32 +464,39 @@ public sealed class WasapiCaptureSession : ICaptureSession
 
         // System loopback is typically 32-bit float stereo — convert as needed
         var format = _systemCapture!.WaveFormat;
-        float[] samples;
+        float[] captured;
 
         if (format.Encoding == WaveFormatEncoding.IeeeFloat && format.BitsPerSample == 32)
         {
-            samples = new float[e.BytesRecorded / 4];
-            Buffer.BlockCopy(e.Buffer, 0, samples, 0, e.BytesRecorded);
+            captured = new float[e.BytesRecorded / 4];
+            Buffer.BlockCopy(e.Buffer, 0, captured, 0, e.BytesRecorded);
         }
         else
         {
-            samples = ConvertToFloat(e.Buffer, e.BytesRecorded);
+            captured = ConvertToFloat(e.Buffer, e.BytesRecorded);
         }
 
+        // Reconcile the endpoint's mix format to the configured rate and stereo
+        // layout before anything downstream sees it. Everything past this point —
+        // levels, the mix buffer, the sidecar — assumes that shape, and the sidecar
+        // is stamped with the configured rate regardless of what the device chose.
+        var samples = _systemNormalizer!.Normalize(captured);
+        const int channels = SystemAudioNormalizer.TargetChannels;
+
         // For stereo system audio, compute RMS from mono-fold
-        var frameCount = samples.Length / Math.Max(format.Channels, 1);
+        var frameCount = samples.Length / channels;
         float sum = 0;
         float peak = 0;
         for (int i = 0; i < frameCount; i++)
         {
             float val = 0;
-            for (int ch = 0; ch < format.Channels; ch++)
+            for (int ch = 0; ch < channels; ch++)
             {
-                var idx = i * format.Channels + ch;
+                var idx = i * channels + ch;
                 if (idx < samples.Length)
                     val += samples[idx];
             }
-            val /= format.Channels;
+            val /= channels;
             sum += val * val;
             peak = Math.Max(peak, Math.Abs(val));
         }
