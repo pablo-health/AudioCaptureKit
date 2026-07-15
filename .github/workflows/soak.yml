@@ -1,0 +1,53 @@
+name: Soak
+
+# Long-running buffer-reliability soak: drives the real capture graph from
+# looped file sources for ~50 minutes of wall-clock real time and asserts the
+# ring buffer never overflows or stalls. Too slow for the PR gate (which runs a
+# ~20s version of the same test), so it runs weekly and on demand.
+
+on:
+  schedule:
+    # Mondays 08:00 UTC.
+    - cron: '0 8 * * 1'
+  workflow_dispatch:
+    inputs:
+      soak_seconds:
+        description: 'Wall-clock capture duration in seconds (default 3000 = 50 min)'
+        required: false
+        default: '3000'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soak-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  soak:
+    name: Capture soak (buffer reliability)
+    runs-on: macos-15
+    # Generous headroom over the 50-min soak for build + start/stop.
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Cache SPM dependencies
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+        with:
+          path: |
+            .build
+            ~/Library/Caches/org.swift.swiftpm
+          key: spm-${{ runner.os }}-${{ hashFiles('Package.swift', 'Package.resolved') }}
+          restore-keys: spm-${{ runner.os }}-
+
+      - name: Build
+        run: swift build --build-tests
+
+      - name: Run soak
+        env:
+          # schedule has no inputs, so fall back to the 50-minute default.
+          SOAK_SECONDS: ${{ github.event.inputs.soak_seconds || '3000' }}
+        run: |
+          echo "Running capture soak for ${SOAK_SECONDS}s of real-time capture"
+          swift test --filter CaptureSoakTests
