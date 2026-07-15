@@ -13,18 +13,38 @@ namespace AudioCapture.Capture;
 /// <summary>
 /// WASAPI-based capture session for Windows. Implements ICaptureSession.
 /// Uses NAudio WasapiCapture (mic) + WasapiLoopbackCapture (system audio).
+///
+/// Either source can be replaced with an injected <see cref="IWaveIn"/> — see
+/// <see cref="WasapiCaptureSession(Func{IWaveIn}, Func{IWaveIn})"/> — which lets
+/// the pipeline run against file fixtures on machines with no audio hardware.
 /// </summary>
 public sealed class WasapiCaptureSession : ICaptureSession
 {
     private readonly object _lock = new();
+
+    // When set, these stand in for the WASAPI endpoints entirely.
+    private readonly Func<IWaveIn>? _micFactory;
+    private readonly Func<IWaveIn>? _systemFactory;
+
     private CaptureState _state = CaptureState.Idle;
     private CaptureConfiguration? _config;
     private AudioLevels _currentLevels = AudioLevels.Zero;
 
-    // NAudio capture devices
-    private WasapiCapture? _micCapture;
-    private WasapiLoopbackCapture? _systemCapture;
+    // Capture sources. Typed as IWaveIn so injected sources drop straight in;
+    // every use below is an IWaveIn member.
+    private IWaveIn? _micCapture;
+    private IWaveIn? _systemCapture;
     private MMDevice? _micDevice;
+
+    // Diagnostics counters (protected by _lock).
+    private long _mixCycles;
+    private long _bytesWritten;
+    private long _micChunks;
+    private long _micBytes;
+    private long _systemChunks;
+    private long _systemBytes;
+    private long _mixErrors;
+    private int _peakBufferedSamples;
 
     // Writers
     private EncryptedWavWriter? _wavWriter;
@@ -53,6 +73,35 @@ public sealed class WasapiCaptureSession : ICaptureSession
     private float _peakMic;
     private float _peakSystem;
 
+    /// <summary>Captures from the real WASAPI mic and loopback endpoints.</summary>
+    public WasapiCaptureSession()
+    {
+    }
+
+    /// <summary>
+    /// Captures from injected sources in place of the WASAPI endpoints.
+    /// </summary>
+    /// <remarks>
+    /// An injected source fully replaces its endpoint: no <c>MMDeviceEnumerator</c>,
+    /// no <c>WasapiCapture</c>, no <c>WasapiLoopbackCapture</c> is constructed for
+    /// it — not in <see cref="Configure"/>, not in <see cref="StartCaptureAsync"/>.
+    /// That total avoidance is the requirement, not an optimization: headless
+    /// runners have no audio endpoints, and merely enumerating them there throws.
+    ///
+    /// Injected sources declare their own <see cref="IWaveIn.WaveFormat"/> — the
+    /// session won't overwrite it — so the factory is responsible for producing
+    /// the shape the pipeline expects: mono 16-bit PCM for the mic, stereo float
+    /// for system audio. <see cref="FileWaveIn.Mono16"/> and
+    /// <see cref="FileWaveIn.StereoFloat"/> build exactly those.
+    /// </remarks>
+    /// <param name="micFactory">Builds the mic source, or null to use the real WASAPI mic.</param>
+    /// <param name="systemFactory">Builds the system-audio source, or null to use real loopback.</param>
+    public WasapiCaptureSession(Func<IWaveIn>? micFactory, Func<IWaveIn>? systemFactory)
+    {
+        _micFactory = micFactory;
+        _systemFactory = systemFactory;
+    }
+
     public CaptureState State
     {
         get { lock (_lock) return _state; }
@@ -61,6 +110,32 @@ public sealed class WasapiCaptureSession : ICaptureSession
     public AudioLevels CurrentLevels
     {
         get { lock (_lock) return _currentLevels; }
+    }
+
+    /// <summary>
+    /// A snapshot of what has flowed through this session so far, readable during
+    /// and after capture. Counters accumulate from construction — a session runs
+    /// at most one capture, since no path leads back out of a terminal state.
+    /// </summary>
+    public CaptureDiagnostics Diagnostics
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return new CaptureDiagnostics
+                {
+                    MixCycles = _mixCycles,
+                    BytesWritten = _bytesWritten,
+                    MicChunks = _micChunks,
+                    MicBytes = _micBytes,
+                    SystemChunks = _systemChunks,
+                    SystemBytes = _systemBytes,
+                    MixErrors = _mixErrors,
+                    PeakBufferedSamples = _peakBufferedSamples,
+                };
+            }
+        }
     }
 
     public ICaptureDelegate? Delegate { get; set; }
@@ -80,8 +155,11 @@ public sealed class WasapiCaptureSession : ICaptureSession
             _config = configuration;
             Directory.CreateDirectory(configuration.OutputDirectory);
 
-            // Resolve mic device
-            if (configuration.EnableMicCapture)
+            // Resolve mic device. Skipped entirely when a mic source is injected:
+            // MMDeviceEnumerator throws on machines with no audio endpoints, and
+            // this runs before StartCaptureAsync — so guarding only the start path
+            // would still fail here.
+            if (configuration.EnableMicCapture && _micFactory == null)
             {
                 using var enumerator = new MMDeviceEnumerator();
                 _micDevice = configuration.MicDeviceId != null
@@ -148,11 +226,11 @@ public sealed class WasapiCaptureSession : ICaptureSession
             }
         }
 
-        // Start mic capture
-        if (config.EnableMicCapture && _micDevice != null)
+        // Start mic capture. An injected factory stands in for the endpoint, so
+        // there's no _micDevice to require in that case.
+        if (config.EnableMicCapture && (_micFactory != null || _micDevice != null))
         {
-            _micCapture = new WasapiCapture(_micDevice);
-            _micCapture.WaveFormat = new WaveFormat((int)config.SampleRate, config.BitDepth, 1);
+            _micCapture = _micFactory?.Invoke() ?? CreateWasapiMic(config);
             _micCapture.DataAvailable += OnMicDataAvailable;
             _micCapture.RecordingStopped += OnMicRecordingStopped;
             _micCapture.StartRecording();
@@ -161,7 +239,7 @@ public sealed class WasapiCaptureSession : ICaptureSession
         // Start system loopback capture
         if (config.EnableSystemCapture)
         {
-            _systemCapture = new WasapiLoopbackCapture();
+            _systemCapture = _systemFactory?.Invoke() ?? new WasapiLoopbackCapture();
             _systemCapture.DataAvailable += OnSystemDataAvailable;
             _systemCapture.RecordingStopped += OnSystemRecordingStopped;
             _systemCapture.StartRecording();
@@ -320,12 +398,22 @@ public sealed class WasapiCaptureSession : ICaptureSession
 
     // --- Private helpers ---
 
+    /// <summary>Builds the real WASAPI mic source in the configured capture format.</summary>
+    private IWaveIn CreateWasapiMic(CaptureConfiguration config)
+    {
+        var capture = new WasapiCapture(_micDevice);
+        capture.WaveFormat = new WaveFormat((int)config.SampleRate, config.BitDepth, 1);
+        return capture;
+    }
+
     private void OnMicDataAvailable(object? sender, WaveInEventArgs e)
     {
         if (e.BytesRecorded == 0) return;
 
         lock (_lock)
         {
+            _micChunks++;
+            _micBytes += e.BytesRecorded;
             if (_state.Kind == CaptureStateKind.Paused) return;
         }
 
@@ -341,6 +429,7 @@ public sealed class WasapiCaptureSession : ICaptureSession
         lock (_lock)
         {
             _micBuffer.AddRange(samples);
+            TrackPeakBuffered();
         }
 
         // Write raw PCM sidecar (encrypted if encryptor configured)
@@ -353,6 +442,8 @@ public sealed class WasapiCaptureSession : ICaptureSession
 
         lock (_lock)
         {
+            _systemChunks++;
+            _systemBytes += e.BytesRecorded;
             if (_state.Kind == CaptureStateKind.Paused) return;
         }
 
@@ -395,6 +486,7 @@ public sealed class WasapiCaptureSession : ICaptureSession
         {
             // If system audio is stereo, store as interleaved stereo
             _systemBuffer.AddRange(samples);
+            TrackPeakBuffered();
         }
 
         // Write raw PCM sidecar as i16 LE (matching macOS format), encrypted if configured
@@ -419,6 +511,7 @@ public sealed class WasapiCaptureSession : ICaptureSession
             system = [.. _systemBuffer];
             _micBuffer.Clear();
             _systemBuffer.Clear();
+            _mixCycles++;
         }
 
         if (_wavWriter == null || _config == null) return;
@@ -428,12 +521,25 @@ public sealed class WasapiCaptureSession : ICaptureSession
             var mixed = _mixer.Mix(mic, system, _config.MixingStrategy);
             var pcmData = StereoMixer.ConvertToInt16Pcm(mixed);
             _wavWriter.Write(pcmData);
+            lock (_lock) _bytesWritten += pcmData.Length;
         }
         catch (Exception ex)
         {
+            lock (_lock) _mixErrors++;
             var error = CaptureException.EncodingFailed($"Mix/write failed: {ex.Message}");
             Delegate?.OnError(error);
         }
+    }
+
+    /// <summary>
+    /// Records the high-water mark of samples awaiting a mix cycle. Must be called
+    /// with <see cref="_lock"/> held.
+    /// </summary>
+    private void TrackPeakBuffered()
+    {
+        var buffered = _micBuffer.Count + _systemBuffer.Count;
+        if (buffered > _peakBufferedSamples)
+            _peakBufferedSamples = buffered;
     }
 
     private void UpdateLevels()

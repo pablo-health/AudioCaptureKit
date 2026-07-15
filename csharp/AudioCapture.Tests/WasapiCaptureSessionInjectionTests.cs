@@ -1,0 +1,174 @@
+using AudioCapture.Capture;
+using AudioCapture.Models;
+using NAudio.Wave;
+using Xunit;
+
+namespace AudioCapture.Tests;
+
+/// <summary>
+/// Covers the capture-injection seam: with sources injected, the session must run
+/// the full pipeline without touching any audio endpoint. These tests are the
+/// stand-in for the CI runner, which has no audio devices at all.
+/// </summary>
+public class WasapiCaptureSessionInjectionTests : IDisposable
+{
+    private readonly string _tempDir;
+
+    public WasapiCaptureSessionInjectionTests()
+    {
+        _tempDir = Path.Combine(Path.GetTempPath(), $"audiocapture_test_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(_tempDir);
+    }
+
+    public void Dispose()
+    {
+        GC.SuppressFinalize(this);
+        if (Directory.Exists(_tempDir))
+            Directory.Delete(_tempDir, recursive: true);
+    }
+
+    private CaptureConfiguration DefaultConfig => new()
+    {
+        SampleRate = 48000,
+        BitDepth = 16,
+        Channels = 2,
+        OutputDirectory = _tempDir,
+    };
+
+    private string WriteFixture(string name, int channels = 1, double seconds = 0.3)
+    {
+        var path = Path.Combine(_tempDir, name);
+        using var writer = new WaveFileWriter(path, new WaveFormat(48000, 16, channels));
+        var frames = (int)(48000 * seconds);
+        for (int i = 0; i < frames; i++)
+        {
+            var sample = (float)(Math.Sin(2 * Math.PI * 440 * i / 48000) * 0.5);
+            for (int c = 0; c < channels; c++)
+                writer.WriteSample(sample);
+        }
+        return path;
+    }
+
+    [Fact]
+    public void Configure_WithInjectedMic_NeverResolvesADevice()
+    {
+        var fixture = WriteFixture("mic.wav");
+        using var session = new WasapiCaptureSession(
+            micFactory: () => FileWaveIn.Mono16(fixture, speedFactor: 50),
+            systemFactory: null);
+
+        // A device id no endpoint can have. Were Configure still resolving the mic
+        // through MMDeviceEnumerator, this would throw — so reaching Ready proves
+        // the enumerator was bypassed rather than merely succeeding on a dev box
+        // that happens to have a microphone.
+        var config = DefaultConfig with
+        {
+            MicDeviceId = "{0.0.1.00000000}.{deadbeef-dead-beef-dead-beefdeadbeef}",
+            EnableSystemCapture = false,
+        };
+
+        session.Configure(config);
+
+        Assert.Equal(CaptureStateKind.Ready, session.State.Kind);
+    }
+
+    [Fact]
+    public async Task InjectedSources_ProduceRecordingAndSidecars()
+    {
+        var micFixture = WriteFixture("mic.wav", channels: 1, seconds: 0.3);
+        var systemFixture = WriteFixture("system.wav", channels: 2, seconds: 0.3);
+
+        using var session = new WasapiCaptureSession(
+            () => FileWaveIn.Mono16(micFixture, speedFactor: 20),
+            () => FileWaveIn.StereoFloat(systemFixture, speedFactor: 20));
+
+        session.Configure(DefaultConfig with { ExportRawPcm = true });
+
+        // StartCaptureAsync only completes once stopped, so don't await it here.
+        var capture = session.StartCaptureAsync();
+        Assert.Equal(CaptureStateKind.Capturing, session.State.Kind);
+
+        await Task.Delay(500); // 0.3s of fixture at 20x drains well inside this
+        var result = await session.StopCaptureAsync();
+        await capture;
+
+        Assert.True(File.Exists(result.FilePath), "mixed WAV should exist");
+        Assert.True(new FileInfo(result.FilePath).Length > 44, "mixed WAV should have audio past the header");
+
+        // Sidecars are what the upload path ships: mic mono, system stereo.
+        Assert.Equal(2, result.RawPcmFilePaths.Length);
+        foreach (var sidecar in result.RawPcmFilePaths)
+            Assert.True(new FileInfo(sidecar).Length > 0, $"{Path.GetFileName(sidecar)} should carry PCM");
+    }
+
+    [Fact]
+    public async Task Diagnostics_DistinguishSourceFlowFromWriteFlow()
+    {
+        var micFixture = WriteFixture("mic.wav", channels: 1, seconds: 0.3);
+        var systemFixture = WriteFixture("system.wav", channels: 2, seconds: 0.3);
+
+        using var session = new WasapiCaptureSession(
+            () => FileWaveIn.Mono16(micFixture, speedFactor: 20),
+            () => FileWaveIn.StereoFloat(systemFixture, speedFactor: 20));
+
+        session.Configure(DefaultConfig);
+        var capture = session.StartCaptureAsync();
+        await Task.Delay(500);
+        await session.StopCaptureAsync();
+        await capture;
+
+        var diagnostics = session.Diagnostics;
+        Assert.True(diagnostics.MicChunks > 0, "mic source should have delivered");
+        Assert.True(diagnostics.SystemChunks > 0, "system source should have delivered");
+        Assert.True(diagnostics.MicBytes > 0);
+        Assert.True(diagnostics.SystemBytes > 0);
+        Assert.True(diagnostics.MixCycles > 0, "mix timer should have run");
+        Assert.True(diagnostics.BytesWritten > 0, "mixed audio should have reached the writer");
+        Assert.Equal(0, diagnostics.MixErrors);
+    }
+
+    [Fact]
+    public async Task MicOnly_RunsWithSystemCaptureDisabled()
+    {
+        var micFixture = WriteFixture("mic.wav", channels: 1, seconds: 0.3);
+
+        using var session = new WasapiCaptureSession(
+            () => FileWaveIn.Mono16(micFixture, speedFactor: 20),
+            systemFactory: null);
+
+        session.Configure(DefaultConfig with { EnableSystemCapture = false });
+        var capture = session.StartCaptureAsync();
+        await Task.Delay(400);
+        var result = await session.StopCaptureAsync();
+        await capture;
+
+        Assert.True(session.Diagnostics.MicChunks > 0);
+        Assert.Equal(0, session.Diagnostics.SystemChunks);
+        Assert.True(File.Exists(result.FilePath));
+    }
+
+    [Fact]
+    public async Task CompletedSession_CannotBeReconfigured()
+    {
+        // Pins today's behaviour: a session runs one capture. CaptureState allows
+        // Completed → Idle, but nothing on the session performs that reset, so
+        // Configure can never be re-entered. Diagnostics therefore accumulate over
+        // a single run and need no per-start reset. A future Reset() would change
+        // both halves of that, and should land with this test updated.
+        var micFixture = WriteFixture("mic.wav", channels: 1, seconds: 0.3);
+
+        using var session = new WasapiCaptureSession(
+            () => FileWaveIn.Mono16(micFixture, speedFactor: 20),
+            systemFactory: null);
+
+        session.Configure(DefaultConfig with { EnableSystemCapture = false });
+        var capture = session.StartCaptureAsync();
+        await Task.Delay(300);
+        await session.StopCaptureAsync();
+        await capture;
+
+        Assert.Equal(CaptureStateKind.Completed, session.State.Kind);
+        Assert.Throws<CaptureException>(
+            () => session.Configure(DefaultConfig with { EnableSystemCapture = false }));
+    }
+}
