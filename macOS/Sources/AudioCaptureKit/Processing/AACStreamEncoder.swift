@@ -32,10 +32,15 @@ final class AACStreamEncoder: @unchecked Sendable {
     private let onFrame: FrameSink
     private let logger: Logger
 
-    /// Leftover interleaved Float samples that didn't fill a full converter
-    /// input packet on the previous `encode` call. AAC works in 1024-sample
-    /// frames; we hand the converter whatever it asks for and let it buffer.
+    /// Set once at `finish()`: the converter's input block then reports
+    /// end-of-stream so the last partial frame is flushed.
     private var pendingInputExhausted = false
+
+    /// Whether the current `drain` cycle has already handed its one input
+    /// buffer to the converter. An instance property (not a captured local) so
+    /// the converter's `@Sendable` input block can flip it without tripping the
+    /// concurrency checker; access stays serialized on the PCM I/O queue.
+    private var inputProvidedThisCycle = false
 
     /// Builds an encoder for `channels`-channel Float32 PCM at `sampleRate`.
     /// Returns nil if AVFoundation can't build the AAC converter (unsupported
@@ -125,7 +130,7 @@ final class AACStreamEncoder: @unchecked Sendable {
     /// Pulls compressed packets out of the converter until it starves (needs
     /// more input) or, when finishing, until it reports end-of-stream.
     private func drain(feeding input: AVAudioPCMBuffer?) {
-        var inputProvided = false
+        inputProvidedThisCycle = false
         let output = AVAudioCompressedBuffer(
             format: converter.outputFormat,
             packetCapacity: 8,
@@ -139,13 +144,13 @@ final class AACStreamEncoder: @unchecked Sendable {
                     statusPtr.pointee = .endOfStream
                     return nil
                 }
-                if inputProvided {
+                if self.inputProvidedThisCycle {
                     // Converter wants a second packet this cycle but we only have
                     // the one chunk — starve it so it returns what it has.
                     statusPtr.pointee = .noDataNow
                     return nil
                 }
-                inputProvided = true
+                self.inputProvidedThisCycle = true
                 statusPtr.pointee = .haveData
                 return input
             }
