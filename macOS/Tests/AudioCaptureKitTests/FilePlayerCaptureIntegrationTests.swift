@@ -33,6 +33,42 @@ struct FilePlayerCaptureIntegrationTests {
         try assertSidecars(result)
     }
 
+    @Test("AAC sidecars: the real graph writes small, decodable .aac channels")
+    func fileInjectionProducesAACSidecars() async throws {
+        let sampleRate = 48000.0
+        let tempDir = try makeTempDirectory(prefix: "acktest-aac")
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let (session, result) = try await runSeparatedCapture(
+            tempDir: tempDir,
+            micTone: 440,
+            systemTone: 880,
+            sampleRate: sampleRate,
+            captureDuration: 3.0,
+            sidecarFormat: .aacADTS
+        )
+
+        try assertGraphRanCleanly(session.diagnostics)
+        #expect(result.rawPCMFileURLs.count == 2, "expected mic + system AAC sidecars")
+
+        for (index, url) in result.rawPCMFileURLs.enumerated() {
+            #expect(url.pathExtension == "aac", "sidecar \(url.lastPathComponent) is not .aac")
+            let size = try (FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int) ?? 0
+            #expect(size > 0, "AAC sidecar \(url.lastPathComponent) is empty")
+
+            // Decodes as real AAC audio, and is far smaller than the equivalent
+            // raw PCM (mono ~2 bytes/frame, stereo ~4) would have been.
+            let file = try AVAudioFile(forReading: url)
+            #expect(file.length > 0, "AAC sidecar \(url.lastPathComponent) decoded empty")
+            let channels = index == 0 ? 1 : 2
+            let approxRawPCM = Int(sampleRate * 3.0) * 2 * channels
+            #expect(
+                size < approxRawPCM / 4,
+                "AAC sidecar (\(size)B) not materially smaller than PCM (\(approxRawPCM)B)"
+            )
+        }
+    }
+
     @Test("A file source is restartable — the probe/start cycle does not consume the fixture head")
     func fileSourceIsRestartable() async throws {
         let sampleRate = 48000.0
@@ -62,7 +98,8 @@ struct FilePlayerCaptureIntegrationTests {
         micTone: Double,
         systemTone: Double,
         sampleRate: Double,
-        captureDuration: TimeInterval
+        captureDuration: TimeInterval,
+        sidecarFormat: SidecarAudioFormat = .rawPCM
     ) async throws -> (session: CompositeCaptureSession, result: RecordingResult) {
         let micFixture = tempDir.appendingPathComponent("mic-fixture.wav")
         let systemFixture = tempDir.appendingPathComponent("system-fixture.wav")
@@ -84,7 +121,8 @@ struct FilePlayerCaptureIntegrationTests {
             enableMicCapture: true,
             enableSystemCapture: true,
             mixingStrategy: .separated,
-            exportRawPCM: true
+            exportRawPCM: true,
+            sidecarFormat: sidecarFormat
         )
         let session = CompositeCaptureSession(
             configuration: config,

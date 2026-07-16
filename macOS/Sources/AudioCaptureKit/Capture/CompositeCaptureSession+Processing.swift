@@ -135,49 +135,6 @@ extension CompositeCaptureSession {
         processBuffersSync()
     }
 
-    private func writeRawPCMSidecars(micSamples: [Float], systemSamples: [Float]) {
-        let (micHandle, systemHandle) = sessionState.withLock {
-            ($0.micPCMFileHandle, $0.systemPCMFileHandle)
-        }
-        let encryptor = configuration.encryptor
-
-        // Convert in-memory (fast), then dispatch the blocking FileHandle writes
-        // to a dedicated I/O queue so the processing loop can drain the next cycle.
-        let micPCM = micHandle != nil ? stereoMixer.convertToInt16PCM(micSamples) : nil
-        let systemPCM = systemHandle != nil ? stereoMixer.convertToInt16PCM(systemSamples) : nil
-        pcmWriteQueue.async { [logger] in
-            if let micPCM {
-                Self.writePCMChunk(micPCM, to: micHandle, encryptor: encryptor, logger: logger)
-            }
-            if let systemPCM {
-                Self.writePCMChunk(systemPCM, to: systemHandle, encryptor: encryptor, logger: logger)
-            }
-        }
-    }
-
-    /// Writes a single PCM chunk, encrypting with the same length-prefixed format
-    /// as `EncryptedFileWriter` when an encryptor is provided.
-    private static func writePCMChunk(
-        _ data: Data,
-        to handle: FileHandle?,
-        encryptor: (any CaptureEncryptor)?,
-        logger: Logger
-    ) {
-        guard let handle else { return }
-        if let encryptor {
-            do {
-                let encrypted = try encryptor.encrypt(data)
-                var chunkLength = UInt32(encrypted.count).littleEndian
-                handle.write(Data(bytes: &chunkLength, count: 4))
-                handle.write(encrypted)
-            } catch {
-                logger.error("PCM sidecar encryption failed: \(error)")
-            }
-        } else {
-            handle.write(data)
-        }
-    }
-
     // MARK: - Audio Buffer Callbacks
 
     /// Processes a single mic audio buffer from AVFoundation.
@@ -329,10 +286,22 @@ extension CompositeCaptureSession {
             throw error
         }
 
-        // Drain any pending PCM writes before closing file handles.
-        pcmWriteQueue.sync {}
+        // Flush any streaming AAC encoders, then drain pending writes, before
+        // closing the sidecar handles. finish() emits the converter's trailing
+        // ADTS frames through the same serial I/O queue, so running it there
+        // (sync) also drains every prior async encode/write enqueued during
+        // capture.
+        let (micEncoder, systemEncoder) = sessionState.withLock {
+            ($0.micAACEncoder, $0.systemAACEncoder)
+        }
+        pcmWriteQueue.sync {
+            micEncoder?.finish()
+            systemEncoder?.finish()
+        }
 
         let rawPCMURLs: [URL] = sessionState.withLock {
+            $0.micAACEncoder = nil
+            $0.systemAACEncoder = nil
             $0.micPCMFileHandle?.closeFile()
             $0.micPCMFileHandle = nil
             $0.systemPCMFileHandle?.closeFile()

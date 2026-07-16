@@ -36,6 +36,10 @@ public final class CompositeCaptureSession: @unchecked Sendable {
         var micPCMFileHandle: FileHandle?
         var systemPCMFileHandle: FileHandle?
         var rawPCMFileURLs: [URL] = []
+        /// AAC encoders when ``CaptureConfiguration/sidecarFormat`` is `.aacADTS`.
+        /// Each writes its ADTS frames to the matching sidecar file handle above.
+        var micAACEncoder: AACStreamEncoder?
+        var systemAACEncoder: AACStreamEncoder?
     }
 
     let sessionState: UnfairLock<SessionState>
@@ -306,7 +310,9 @@ extension CompositeCaptureSession: AudioCaptureSession {
             enableMicCapture: config.enableMicCapture,
             enableSystemCapture: config.enableSystemCapture,
             mixingStrategy: config.mixingStrategy,
-            exportRawPCM: config.exportRawPCM
+            exportRawPCM: config.exportRawPCM,
+            sidecarFormat: config.sidecarFormat,
+            sidecarAACBitRate: config.sidecarAACBitRate
         )
 
         do {
@@ -318,38 +324,6 @@ extension CompositeCaptureSession: AudioCaptureSession {
 
         if config.exportRawPCM {
             openPCMSidecarFiles(baseName: fileName, directory: config.outputDirectory)
-        }
-    }
-
-    /// Opens PCM sidecar files for raw channel export.
-    /// Uses `.enc.pcm` extension when an encryptor is configured.
-    private func openPCMSidecarFiles(baseName: String, directory: URL) {
-        let ext = configuration.encryptor != nil ? "enc.pcm" : "pcm"
-        let micURL = directory.appendingPathComponent("\(baseName)_mic.\(ext)")
-        let systemURL = directory.appendingPathComponent("\(baseName)_system.\(ext)")
-        let fm = FileManager.default
-
-        var handles: (mic: FileHandle?, system: FileHandle?) = (nil, nil)
-
-        if fm.createFile(atPath: micURL.path, contents: nil) {
-            handles.mic = FileHandle(forWritingAtPath: micURL.path)
-        } else {
-            logger.warning("Failed to create mic PCM sidecar: \(micURL.lastPathComponent)")
-        }
-
-        if fm.createFile(atPath: systemURL.path, contents: nil) {
-            handles.system = FileHandle(forWritingAtPath: systemURL.path)
-        } else {
-            logger.warning("Failed to create system PCM sidecar: \(systemURL.lastPathComponent)")
-        }
-
-        sessionState.withLock {
-            $0.micPCMFileHandle = handles.mic
-            $0.systemPCMFileHandle = handles.system
-            var urls: [URL] = []
-            if handles.mic != nil { urls.append(micURL) }
-            if handles.system != nil { urls.append(systemURL) }
-            $0.rawPCMFileURLs = urls
         }
     }
 
