@@ -37,4 +37,21 @@ public sealed record CaptureDiagnostics
     /// bound points at a stalled mix timer.
     /// </summary>
     public int PeakBufferedSamples { get; init; }
+
+    /// <summary>
+    /// The system-audio endpoint's own mix-format rate, or 0 when system capture
+    /// was off. Unlike the mic, this rate is the device's choice, not ours — and a
+    /// sidecar stamped with the configured rate while carrying this one plays at
+    /// the wrong speed, so it is worth recording what the endpoint actually gave us.
+    /// </summary>
+    public int SystemSourceSampleRate { get; init; }
+
+    /// <summary>The system-audio endpoint's own channel count, or 0 when system capture was off.</summary>
+    public int SystemSourceChannels { get; init; }
+
+    /// <summary>
+    /// Whether the system-audio endpoint's format had to be reconciled to the
+    /// configured shape. False means it already matched (or system capture was off).
+    /// </summary>
+    public bool SystemNormalized { get; init; }
 }
