@@ -56,20 +56,26 @@ public class WasapiCaptureSessionInjectionTests : IDisposable
         // not ours. The sidecar is stamped with the *configured* rate regardless, so
         // an unreconciled endpoint yields audio that plays ~9% fast.
         //
-        // Both sidecars are driven by the same wall clock, so their sizes are
-        // comparable without depending on how long the test actually ran: mic is
-        // 48 kHz mono, system is 48 kHz stereo, so system should be ~2x mic. An
-        // un-normalized 44.1 kHz system channel lands at ~1.84x instead.
-        var micFixture = WriteFixture("mic.wav", channels: 1, seconds: 0.3);
-        var systemFixture = WriteFixture("system.wav", channels: 2, seconds: 0.3);
+        // Both fixtures play through exactly once (loop: false), so each sidecar holds
+        // a fixed sample count set by the fixture length, not by how long the test ran.
+        // That is what makes the size ratio stable: looping instead ties each sidecar
+        // to the wall clock, and the two stop on independent callback boundaries, so
+        // the ratio jitters by a whole chunk either way — enough to cross the 2.0-vs-
+        // 1.84 line under load. With a single pass the ratio is deterministic: mic is
+        // 48 kHz mono, system reconciles to 48 kHz stereo, so system is ~2x mic; an
+        // un-normalized 44.1 kHz system channel would land at ~1.84x instead.
+        var micFixture = WriteFixture("mic.wav", channels: 1, seconds: 0.5);
+        var systemFixture = WriteFixture("system.wav", channels: 2, seconds: 0.5);
 
         using var session = new WasapiCaptureSession(
-            () => FileWaveIn.Mono16(micFixture, loop: true),
-            () => FileWaveIn.StereoFloat(systemFixture, sampleRate: 44100, loop: true));
+            () => FileWaveIn.Mono16(micFixture, loop: false),
+            () => FileWaveIn.StereoFloat(systemFixture, sampleRate: 44100, loop: false));
 
         session.Configure(DefaultConfig with { ExportRawPcm = true });
 
         var capture = session.StartCaptureAsync();
+        // Comfortably longer than the 0.5s fixtures so both drain fully even under
+        // load; the captured sample count is fixed by the fixtures, not this delay.
         await Task.Delay(TimeSpan.FromSeconds(1.5));
         var result = await session.StopCaptureAsync();
         await capture;
@@ -82,8 +88,9 @@ public class WasapiCaptureSessionInjectionTests : IDisposable
         var systemBytes = new FileInfo(result.RawPcmFilePaths[1]).Length;
         var ratio = (double)systemBytes / micBytes;
 
-        // Tight enough to separate 2.0 from the 1.84 an unreconciled endpoint gives.
-        Assert.InRange(ratio, 1.9, 2.1);
+        // Deterministic at ~2.0 now, so the band only has to separate it from the 1.84
+        // an unreconciled endpoint gives.
+        Assert.InRange(ratio, 1.95, 2.05);
     }
 
     [Fact]
