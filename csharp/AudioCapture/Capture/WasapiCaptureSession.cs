@@ -51,6 +51,16 @@ public sealed class WasapiCaptureSession : ICaptureSession
     private FileStream? _micPcmWriter;
     private FileStream? _systemPcmWriter;
 
+    // Guards the raw-PCM sidecar streams against the one overlap the stop path can't
+    // otherwise rule out: NAudio's StopRecording only signals its capture thread, so a
+    // DataAvailable handler can still reach these streams as stop disposes them, and
+    // FileStream is not safe for concurrent write/dispose. The window is narrow — the
+    // slow work is the encrypt, before any stream contact — and did not reproduce on
+    // hardware, but an undecryptable sidecar of a patient session is not worth leaving
+    // to timing.
+    private readonly object _sidecarLock = new();
+    private bool _sidecarsClosed;
+
     // Mixer
     private readonly StereoMixer _mixer = new();
 
@@ -342,10 +352,18 @@ public sealed class WasapiCaptureSession : ICaptureSession
 
         // Close writers
         var checksum = _wavWriter?.Close() ?? "";
-        _micPcmWriter?.Dispose();
-        _micPcmWriter = null;
-        _systemPcmWriter?.Dispose();
-        _systemPcmWriter = null;
+
+        // Close the sidecars under the lock the capture callbacks write through, so a
+        // handler still running as we stop can't write into a disposed stream. After
+        // this, WritePcmSidecar is a no-op.
+        lock (_sidecarLock)
+        {
+            _sidecarsClosed = true;
+            _micPcmWriter?.Dispose();
+            _micPcmWriter = null;
+            _systemPcmWriter?.Dispose();
+            _systemPcmWriter = null;
+        }
 
         var config = _config!;
         var duration = _durationStopwatch.Elapsed;
@@ -434,8 +452,14 @@ public sealed class WasapiCaptureSession : ICaptureSession
         _maxDurationTimer?.Dispose();
         DisposeCapture();
         _wavWriter?.Dispose();
-        _micPcmWriter?.Dispose();
-        _systemPcmWriter?.Dispose();
+        lock (_sidecarLock)
+        {
+            _sidecarsClosed = true;
+            _micPcmWriter?.Dispose();
+            _micPcmWriter = null;
+            _systemPcmWriter?.Dispose();
+            _systemPcmWriter = null;
+        }
     }
 
     // --- Private helpers ---
@@ -721,16 +745,28 @@ public sealed class WasapiCaptureSession : ICaptureSession
         {
             var chunk = new byte[count];
             Buffer.BlockCopy(data, 0, chunk, 0, count);
+            // Encrypt outside the lock — it's the slow part and touches no stream. Only
+            // the framed write is guarded, and it must land as one unit or the sidecar
+            // desyncs the same way the main file would.
             var encrypted = _config.Encryptor.Encrypt(chunk);
             var lengthBytes = BitConverter.GetBytes((uint)encrypted.Length);
             if (!BitConverter.IsLittleEndian)
                 Array.Reverse(lengthBytes);
-            writer.Write(lengthBytes, 0, 4);
-            writer.Write(encrypted, 0, encrypted.Length);
+
+            lock (_sidecarLock)
+            {
+                if (_sidecarsClosed) return;
+                writer.Write(lengthBytes, 0, 4);
+                writer.Write(encrypted, 0, encrypted.Length);
+            }
         }
         else
         {
-            writer.Write(data, 0, count);
+            lock (_sidecarLock)
+            {
+                if (_sidecarsClosed) return;
+                writer.Write(data, 0, count);
+            }
         }
     }
 
