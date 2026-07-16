@@ -238,4 +238,86 @@ public class WasapiCaptureSessionInjectionTests : IDisposable
         Assert.Throws<CaptureException>(
             () => session.Configure(DefaultConfig with { EnableSystemCapture = false }));
     }
+
+    [Fact]
+    public async Task BlendedStrategy_ReportsCenterMicAndStereoSystem()
+    {
+        // Blended sums mic into both channels and leaves system stereo, so neither
+        // source owns a channel. The metadata must say so — claiming mic=Left/
+        // system=Right (the separated shape) would tell the backend it can split
+        // speakers by channel when the mix makes that impossible.
+        var micFixture = WriteFixture("mic.wav", channels: 1, seconds: 0.3);
+        var systemFixture = WriteFixture("system.wav", channels: 2, seconds: 0.3);
+
+        using var session = new WasapiCaptureSession(
+            () => FileWaveIn.Mono16(micFixture, speedFactor: 20),
+            () => FileWaveIn.StereoFloat(systemFixture, speedFactor: 20));
+
+        session.Configure(DefaultConfig with { MixingStrategy = MixingStrategy.Blended });
+        var capture = session.StartCaptureAsync();
+        await Task.Delay(500);
+        var result = await session.StopCaptureAsync();
+        await capture;
+
+        Assert.Equal(ChannelLayout.Blended, result.Metadata.ChannelLayout);
+        Assert.Equal(AudioChannel.Center, result.Metadata.Tracks.Single(t => t.Type == AudioTrackType.Mic).Channel);
+        Assert.Equal(AudioChannel.Stereo, result.Metadata.Tracks.Single(t => t.Type == AudioTrackType.System).Channel);
+    }
+
+    [Fact]
+    public async Task SeparatedStrategy_ReportsLeftMicAndRightSystem()
+    {
+        // Separated genuinely puts mic on Left and the system mono-fold on Right, so
+        // the per-channel track claims are true and channel-based diarization works.
+        var micFixture = WriteFixture("mic.wav", channels: 1, seconds: 0.3);
+        var systemFixture = WriteFixture("system.wav", channels: 2, seconds: 0.3);
+
+        using var session = new WasapiCaptureSession(
+            () => FileWaveIn.Mono16(micFixture, speedFactor: 20),
+            () => FileWaveIn.StereoFloat(systemFixture, speedFactor: 20));
+
+        session.Configure(DefaultConfig with { MixingStrategy = MixingStrategy.Separated });
+        var capture = session.StartCaptureAsync();
+        await Task.Delay(500);
+        var result = await session.StopCaptureAsync();
+        await capture;
+
+        Assert.Equal(ChannelLayout.SeparatedStereo, result.Metadata.ChannelLayout);
+        Assert.Equal(AudioChannel.Left, result.Metadata.Tracks.Single(t => t.Type == AudioTrackType.Mic).Channel);
+        Assert.Equal(AudioChannel.Right, result.Metadata.Tracks.Single(t => t.Type == AudioTrackType.System).Channel);
+    }
+
+    [Fact]
+    public async Task MismatchedChunkSizes_MixedLengthTracksTheMicClock()
+    {
+        // Mic and system arrive in different-sized callbacks, so at each mix tick one
+        // side leads the other. Draining both buffers to empty and padding the shorter
+        // to max() every cycle fabricated silence on the lagging side and stretched the
+        // timeline. Consuming the common minimum and carrying the remainder keeps the
+        // mixed length pinned to the true ~0.5s of audio.
+        //
+        // Single pass (loop: false) so the captured frame count is fixed by the
+        // fixtures, not by wall-clock timing.
+        var micFixture = WriteFixture("mic.wav", channels: 1, seconds: 0.5);
+        var systemFixture = WriteFixture("system.wav", channels: 2, seconds: 0.5);
+
+        using var session = new WasapiCaptureSession(
+            () => FileWaveIn.Mono16(micFixture, chunkDuration: TimeSpan.FromMilliseconds(10), loop: false),
+            () => FileWaveIn.StereoFloat(systemFixture, chunkDuration: TimeSpan.FromMilliseconds(40), loop: false));
+
+        session.Configure(DefaultConfig with { ExportRawPcm = true });
+        var capture = session.StartCaptureAsync();
+        await Task.Delay(TimeSpan.FromSeconds(1.5)); // both fixtures drain well inside this
+        var result = await session.StopCaptureAsync();
+        await capture;
+
+        // Plaintext sidecar (i16 mono) and mixed WAV (i16 stereo, 44-byte header).
+        var micSidecarFrames = new FileInfo(result.RawPcmFilePaths[0]).Length / 2;
+        var mixedFrames = (new FileInfo(result.FilePath).Length - 44) / 4;
+
+        // Every mic frame maps to one mixed frame; no padding adds frames beyond it.
+        Assert.InRange(mixedFrames, micSidecarFrames - 480, micSidecarFrames + 480);
+        // And that length is the real 0.5s (24000 frames @ 48 kHz), not an inflated one.
+        Assert.InRange(mixedFrames, 24000 - 480, 24000 + 480);
+    }
 }
