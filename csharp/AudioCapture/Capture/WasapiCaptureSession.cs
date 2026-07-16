@@ -51,6 +51,16 @@ public sealed class WasapiCaptureSession : ICaptureSession
     private FileStream? _micPcmWriter;
     private FileStream? _systemPcmWriter;
 
+    // Guards the raw-PCM sidecar streams against the one overlap the stop path can't
+    // otherwise rule out: NAudio's StopRecording only signals its capture thread, so a
+    // DataAvailable handler can still reach these streams as stop disposes them, and
+    // FileStream is not safe for concurrent write/dispose. The window is narrow — the
+    // slow work is the encrypt, before any stream contact — and did not reproduce on
+    // hardware, but an undecryptable sidecar of a patient session is not worth leaving
+    // to timing.
+    private readonly object _sidecarLock = new();
+    private bool _sidecarsClosed;
+
     // Mixer
     private readonly StereoMixer _mixer = new();
 
@@ -66,7 +76,12 @@ public sealed class WasapiCaptureSession : ICaptureSession
     private readonly Stopwatch _durationStopwatch = new();
     private TaskCompletionSource<RecordingResult>? _stopTcs;
     private Timer? _maxDurationTimer;
-    private Timer? _mixTimer;
+
+    // The mix loop. A single pump task drives every mix/write, which is what keeps
+    // writes serialized — see RunMixPumpAsync.
+    private PeriodicTimer? _mixTimer;
+    private Task? _mixPump;
+    private CancellationTokenSource? _mixCts;
 
     // File path for the main WAV recording (set in StartCaptureAsync)
     private string? _wavFilePath;
@@ -260,8 +275,10 @@ public sealed class WasapiCaptureSession : ICaptureSession
             _systemCapture.StartRecording();
         }
 
-        // Start periodic mix timer (every 100ms, mix buffered audio and write)
-        _mixTimer = new Timer(MixAndWrite, null, TimeSpan.FromMilliseconds(100), TimeSpan.FromMilliseconds(100));
+        // Start the mix loop (every 100ms, mix buffered audio and write)
+        _mixCts = new CancellationTokenSource();
+        _mixTimer = new PeriodicTimer(TimeSpan.FromMilliseconds(100));
+        _mixPump = Task.Run(() => RunMixPumpAsync(_mixTimer, _mixCts.Token));
 
         // Start duration tracking
         _durationStopwatch.Restart();
@@ -308,7 +325,7 @@ public sealed class WasapiCaptureSession : ICaptureSession
         }
     }
 
-    public Task<RecordingResult> StopCaptureAsync()
+    public async Task<RecordingResult> StopCaptureAsync()
     {
         lock (_lock)
         {
@@ -319,24 +336,34 @@ public sealed class WasapiCaptureSession : ICaptureSession
             TransitionTo(CaptureState.Stopping);
         }
 
-        // Stop capture devices
-        _mixTimer?.Dispose();
-        _mixTimer = null;
         _maxDurationTimer?.Dispose();
         _maxDurationTimer = null;
 
+        // Stop the sources first so no new samples arrive, then drain the pump. Only
+        // once the drain returns is this thread the sole writer, which is what makes
+        // the final flush and Close below safe.
         _micCapture?.StopRecording();
         _systemCapture?.StopRecording();
 
+        await StopMixPumpAsync().ConfigureAwait(false);
+
         // Flush remaining buffered audio
-        MixAndWrite(null);
+        MixAndWrite();
 
         // Close writers
         var checksum = _wavWriter?.Close() ?? "";
-        _micPcmWriter?.Dispose();
-        _micPcmWriter = null;
-        _systemPcmWriter?.Dispose();
-        _systemPcmWriter = null;
+
+        // Close the sidecars under the lock the capture callbacks write through, so a
+        // handler still running as we stop can't write into a disposed stream. After
+        // this, WritePcmSidecar is a no-op.
+        lock (_sidecarLock)
+        {
+            _sidecarsClosed = true;
+            _micPcmWriter?.Dispose();
+            _micPcmWriter = null;
+            _systemPcmWriter?.Dispose();
+            _systemPcmWriter = null;
+        }
 
         var config = _config!;
         var duration = _durationStopwatch.Elapsed;
@@ -395,7 +422,7 @@ public sealed class WasapiCaptureSession : ICaptureSession
         Delegate?.OnCaptureFinished(result);
         _stopTcs?.TrySetResult(result);
 
-        return Task.FromResult(result);
+        return result;
     }
 
     public Task<AudioSource[]> GetAvailableAudioSourcesAsync() =>
@@ -403,12 +430,36 @@ public sealed class WasapiCaptureSession : ICaptureSession
 
     public void Dispose()
     {
-        _mixTimer?.Dispose();
+        // A session disposed without a stop can still have a pump running. Wait it out
+        // before the writers go away underneath it. After a normal stop the pump is
+        // already drained and this is a no-op. The pump never captures a sync context,
+        // so the wait cannot deadlock on one.
+        //
+        // Best effort throughout: Dispose must not throw, and racing a concurrent stop
+        // can hand us an already-disposed source or a faulted pump.
+        try
+        {
+            _mixCts?.Cancel();
+            _mixTimer?.Dispose();
+            _mixPump?.Wait(TimeSpan.FromSeconds(5));
+            _mixCts?.Dispose();
+        }
+        catch
+        {
+            // A faulted pump has already reported via OnError.
+        }
+
         _maxDurationTimer?.Dispose();
         DisposeCapture();
         _wavWriter?.Dispose();
-        _micPcmWriter?.Dispose();
-        _systemPcmWriter?.Dispose();
+        lock (_sidecarLock)
+        {
+            _sidecarsClosed = true;
+            _micPcmWriter?.Dispose();
+            _micPcmWriter = null;
+            _systemPcmWriter?.Dispose();
+            _systemPcmWriter = null;
+        }
     }
 
     // --- Private helpers ---
@@ -519,7 +570,59 @@ public sealed class WasapiCaptureSession : ICaptureSession
         }
     }
 
-    private void MixAndWrite(object? state)
+    /// <summary>
+    /// Drives mixing on one task, so a tick's mix and write always complete before
+    /// the next tick begins. Serializing here is what makes the writes safe: encrypt
+    /// plus disk write has no obligation to fit inside the 100ms interval, and two
+    /// ticks interleaving in the writer would desync the length-prefix framing and
+    /// cost every byte after the tear.
+    ///
+    /// A tick that overruns delays the next one instead of racing it; the sample
+    /// buffers hold the surplus and the following mix picks it up.
+    /// </summary>
+    private async Task RunMixPumpAsync(PeriodicTimer timer, CancellationToken ct)
+    {
+        try
+        {
+            while (await timer.WaitForNextTickAsync(ct).ConfigureAwait(false))
+                MixAndWrite();
+        }
+        catch (OperationCanceledException)
+        {
+            // Stop asked for the pump to end; the stopping thread does the final flush.
+        }
+    }
+
+    /// <summary>
+    /// Ends the mix loop and waits out any in-flight mix. This is a barrier: once it
+    /// returns, no other thread is inside the writer, which is what lets the caller
+    /// flush and close the file safely. Disposing the timer alone would not wait —
+    /// it would leave a tick running into a closed writer.
+    /// </summary>
+    private async Task StopMixPumpAsync()
+    {
+        _mixCts?.Cancel();
+        _mixTimer?.Dispose();
+
+        if (_mixPump != null)
+        {
+            try
+            {
+                await _mixPump.ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                // Expected on cancellation.
+            }
+        }
+
+        _mixPump = null;
+        _mixTimer = null;
+        _mixCts?.Dispose();
+        _mixCts = null;
+    }
+
+    private void MixAndWrite()
     {
         float[] mic;
         float[] system;
@@ -642,16 +745,28 @@ public sealed class WasapiCaptureSession : ICaptureSession
         {
             var chunk = new byte[count];
             Buffer.BlockCopy(data, 0, chunk, 0, count);
+            // Encrypt outside the lock — it's the slow part and touches no stream. Only
+            // the framed write is guarded, and it must land as one unit or the sidecar
+            // desyncs the same way the main file would.
             var encrypted = _config.Encryptor.Encrypt(chunk);
             var lengthBytes = BitConverter.GetBytes((uint)encrypted.Length);
             if (!BitConverter.IsLittleEndian)
                 Array.Reverse(lengthBytes);
-            writer.Write(lengthBytes, 0, 4);
-            writer.Write(encrypted, 0, encrypted.Length);
+
+            lock (_sidecarLock)
+            {
+                if (_sidecarsClosed) return;
+                writer.Write(lengthBytes, 0, 4);
+                writer.Write(encrypted, 0, encrypted.Length);
+            }
         }
         else
         {
-            writer.Write(data, 0, count);
+            lock (_sidecarLock)
+            {
+                if (_sidecarsClosed) return;
+                writer.Write(data, 0, count);
+            }
         }
     }
 
