@@ -26,38 +26,21 @@ public struct AudioFormatConverter: Sendable {
     ///   - channels: Number of audio channels (e.g., 2 for stereo).
     ///   - dataSize: Size of the audio data in bytes. Use 0 if unknown (update later).
     /// - Returns: A 44-byte WAV header as `Data`.
+    /// Delegates to `WAVHeader` in AudioCaptureCore, kept here so existing
+    /// callers do not have to change. The header is pure byte layout and does
+    /// not belong beside the AVFoundation conversion helpers below.
     public static func generateWAVHeader(
         sampleRate: UInt32,
         bitDepth: UInt16,
         channels: UInt16,
         dataSize: UInt32
     ) -> Data {
-        var header = Data(capacity: 44)
-
-        let byteRate = sampleRate * UInt32(channels) * UInt32(bitDepth) / 8
-        let blockAlign = channels * bitDepth / 8
-        let chunkSize = 36 + dataSize
-
-        // RIFF chunk descriptor
-        header.append(contentsOf: [0x52, 0x49, 0x46, 0x46]) // "RIFF"
-        appendUInt32(&header, chunkSize) // Chunk size
-        header.append(contentsOf: [0x57, 0x41, 0x56, 0x45]) // "WAVE"
-
-        // "fmt " sub-chunk
-        header.append(contentsOf: [0x66, 0x6D, 0x74, 0x20]) // "fmt "
-        appendUInt32(&header, 16) // Sub-chunk size (PCM)
-        appendUInt16(&header, 1) // Audio format (1 = PCM)
-        appendUInt16(&header, channels) // Number of channels
-        appendUInt32(&header, sampleRate) // Sample rate
-        appendUInt32(&header, byteRate) // Byte rate
-        appendUInt16(&header, blockAlign) // Block align
-        appendUInt16(&header, bitDepth) // Bits per sample
-
-        // "data" sub-chunk
-        header.append(contentsOf: [0x64, 0x61, 0x74, 0x61]) // "data"
-        appendUInt32(&header, dataSize) // Data size
-
-        return header
+        WAVHeader.make(
+            sampleRate: sampleRate,
+            bitDepth: bitDepth,
+            channels: channels,
+            dataSize: dataSize
+        )
     }
 
     /// Extracts float samples from an `AVAudioPCMBuffer`.

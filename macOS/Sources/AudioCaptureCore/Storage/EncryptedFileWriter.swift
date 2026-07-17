@@ -62,7 +62,7 @@ public final class EncryptedFileWriter: @unchecked Sendable {
 
             ws.fileHandle = try FileHandle(forWritingTo: fileURL)
 
-            let header = AudioFormatConverter.generateWAVHeader(
+            let header = WAVHeader.make(
                 sampleRate: UInt32(configuration.sampleRate),
                 bitDepth: UInt16(configuration.bitDepth),
                 channels: UInt16(configuration.channels),
