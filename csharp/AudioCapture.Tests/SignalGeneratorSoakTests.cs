@@ -29,6 +29,7 @@ namespace AudioCapture.Tests;
 /// its own test below, which asserts the behaviour that actually matters.</para>
 /// </summary>
 [Trait("Category", "Soak")]
+[Collection("RealtimeSoak")]
 public class SignalGeneratorSoakTests : IDisposable
 {
     private const int SampleRate = 48000;

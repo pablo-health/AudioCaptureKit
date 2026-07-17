@@ -348,7 +348,7 @@ public sealed class WasapiCaptureSession : ICaptureSession
         await StopMixPumpAsync().ConfigureAwait(false);
 
         // Flush remaining buffered audio
-        MixAndWrite();
+        MixAndWrite(flush: true);
 
         // Close writers
         var checksum = _wavWriter?.Close() ?? "";
@@ -369,16 +369,7 @@ public sealed class WasapiCaptureSession : ICaptureSession
         var duration = _durationStopwatch.Elapsed;
         var filePath = _wavFilePath ?? "";
 
-        // Build tracks
-        var tracks = new List<AudioTrack>();
-        if (config.EnableMicCapture)
-            tracks.Add(new AudioTrack(AudioTrackType.Mic, AudioChannel.Left, "Microphone"));
-        if (config.EnableSystemCapture)
-            tracks.Add(new AudioTrack(AudioTrackType.System, AudioChannel.Right, "System Audio"));
-
-        var channelLayout = config.MixingStrategy == MixingStrategy.Separated
-            ? ChannelLayout.SeparatedStereo
-            : ChannelLayout.Blended;
+        var (tracks, channelLayout) = BuildTrackMetadata(config);
 
         var rawPcmPaths = new List<string>();
         if (_config!.ExportRawPcm)
@@ -622,20 +613,29 @@ public sealed class WasapiCaptureSession : ICaptureSession
         _mixCts = null;
     }
 
-    private void MixAndWrite()
+    private void MixAndWrite(bool flush = false)
     {
         float[] mic;
         float[] system;
 
         lock (_lock)
         {
-            if (_micBuffer.Count == 0 && _systemBuffer.Count == 0)
-                return;
+            var micFrames = _micBuffer.Count;
+            var systemFrames = _systemBuffer.Count / 2;
 
-            mic = [.. _micBuffer];
-            system = [.. _systemBuffer];
-            _micBuffer.Clear();
-            _systemBuffer.Clear();
+            // Consume mic and system in lockstep, leaving the remainder for the next
+            // cycle. Draining both buffers to empty and padding the shorter to max()
+            // each cycle — as this did before — fabricates silence on whichever side
+            // lagged and walks the two streams out of alignment over a long session.
+            // Taking the common minimum and carrying the rest keeps them frame-locked.
+            // ResolveFramesToConsume bounds a genuinely stalled partner; flush drains
+            // whatever is left at stop, where a final ragged edge is unavoidable and
+            // harmless.
+            var frames = ResolveFramesToConsume(micFrames, systemFrames, flush);
+            if (frames == 0) return;
+
+            mic = TakeFront(_micBuffer, Math.Min(frames, micFrames));
+            system = TakeFront(_systemBuffer, Math.Min(frames, systemFrames) * 2);
             _mixCycles++;
         }
 
@@ -654,6 +654,98 @@ public sealed class WasapiCaptureSession : ICaptureSession
             var error = CaptureException.EncodingFailed($"Mix/write failed: {ex.Message}");
             Delegate?.OnError(error);
         }
+    }
+
+    /// <summary>
+    /// How many frames this mix cycle should consume from each buffer, keeping mic and
+    /// system aligned: take the common minimum, carry the remainder, so the two stay
+    /// frame-locked and neither is padded with fabricated silence.
+    ///
+    /// Symmetric — whichever side leads is the one held back. This diverges from
+    /// macOS's readPendingSamples, which treats mic as the primary clock and only
+    /// zero-fills a fully-empty system buffer. The extra symmetry is deliberate: these
+    /// are growable List buffers, not macOS's drop-on-overflow ring buffers, so a
+    /// partner that stalls has to be bounded here rather than by overflow — and it
+    /// covers a stalled mic, which macOS handles not at all. Must hold <see cref="_lock"/>.
+    /// </summary>
+    private int ResolveFramesToConsume(int micFrames, int systemFrames, bool flush)
+    {
+        // End of capture: take whatever is left in one pass; Mix zero-pads the ragged
+        // tail, which is a few ms at most and has no next cycle to align to.
+        if (flush)
+            return Math.Max(micFrames, systemFrames);
+
+        // A partner behind by less than this is merely late — wait for it and stay
+        // aligned. Beyond it, treat it as stalled. Kept generous on purpose: firing
+        // early on a still-arriving partner would zero-fill a gap and re-introduce the
+        // very misalignment this method exists to prevent. The cost of waiting is
+        // bounded buffering (0.5s ~ 192 KB of floats); the cost of firing early is
+        // permanent skew, so err toward waiting.
+        const int stallGuard = 24000; // 0.5s at the configured 48 kHz
+
+        var micEnabled = _config?.EnableMicCapture ?? false;
+        var systemEnabled = _config?.EnableSystemCapture ?? false;
+
+        // Single-source: that source is the clock, nothing to align against — drain it.
+        if (!micEnabled)
+            return systemFrames;
+        if (!systemEnabled)
+            return micFrames;
+
+        // Steady state: consume the aligned common minimum and carry the remainder.
+        //
+        // Guard: if one side has surged more than stallGuard ahead of the other, its
+        // partner has stalled (a device hiccup, or the injected pump losing its thread
+        // under test load) and draining only the common minimum would let the leading
+        // side grow without bound. Drain the whole surplus, letting Mix zero-fill the
+        // stalled side, so the buffer clears in one cycle. In the steady state the
+        // surplus is negative and this reduces to the plain aligned minimum.
+        var aligned = Math.Min(micFrames, systemFrames);
+        var surplus = Math.Max(micFrames, systemFrames) - stallGuard;
+        return Math.Max(aligned, Math.Max(surplus, 0));
+    }
+
+    /// <summary>
+    /// Removes and returns the first <paramref name="count"/> items, leaving the rest
+    /// in place for the next cycle. Must hold <see cref="_lock"/>.
+    /// </summary>
+    private static float[] TakeFront(List<float> buffer, int count)
+    {
+        if (count <= 0) return [];
+        var taken = new float[count];
+        buffer.CopyTo(0, taken, 0, count);
+        buffer.RemoveRange(0, count);
+        return taken;
+    }
+
+    /// <summary>
+    /// Describes the tracks and channel layout the mix actually produced, so the
+    /// backend isn't told it can split speakers by channel when it can't. Mirrors
+    /// macOS finalizeRecording:
+    /// <list type="bullet">
+    /// <item>Separated (and reserved Multichannel): L = mic, R = system mono-fold, so
+    /// mic is Left and system is Right — genuinely channel-separated.</item>
+    /// <item>Blended: mic is summed into both channels (phantom Center) while system
+    /// keeps its stereo image, so neither source owns a channel.</item>
+    /// </list>
+    /// The tracks stay gated on which sources are enabled.
+    /// </summary>
+    private static (AudioTrack[] Tracks, ChannelLayout Layout) BuildTrackMetadata(CaptureConfiguration config)
+    {
+        var separated = config.MixingStrategy is MixingStrategy.Separated or MixingStrategy.Multichannel;
+
+        var tracks = new List<AudioTrack>();
+        if (config.EnableMicCapture)
+            tracks.Add(separated
+                ? new AudioTrack(AudioTrackType.Mic, AudioChannel.Left, "Mic (Local)")
+                : new AudioTrack(AudioTrackType.Mic, AudioChannel.Center, null));
+        if (config.EnableSystemCapture)
+            tracks.Add(separated
+                ? new AudioTrack(AudioTrackType.System, AudioChannel.Right, "System (Remote, mono-fold)")
+                : new AudioTrack(AudioTrackType.System, AudioChannel.Stereo, null));
+
+        var layout = separated ? ChannelLayout.SeparatedStereo : ChannelLayout.Blended;
+        return ([.. tracks], layout);
     }
 
     /// <summary>
