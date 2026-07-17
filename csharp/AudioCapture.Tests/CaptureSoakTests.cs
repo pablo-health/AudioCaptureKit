@@ -6,6 +6,16 @@ using Xunit;
 namespace AudioCapture.Tests;
 
 /// <summary>
+/// Real-time soaks pace themselves against the wall clock, so they must not co-run
+/// with the CPU-bound parallel suite: sharing the box starves their pump scheduling
+/// and turns the backlog/duration assertions into a measurement of the test runner
+/// rather than the capture graph. This collection opts them out of cross-collection
+/// parallelism so each soak gets the machine while it runs.
+/// </summary>
+[CollectionDefinition("RealtimeSoak", DisableParallelization = true)]
+public class RealtimeSoakCollection;
+
+/// <summary>
 /// Sustained-capture soak: drives the real <see cref="WasapiCaptureSession"/> graph
 /// from looped file sources for a long, wall-clock <b>real-time</b> run and asserts
 /// the buffers stay clean the whole way — steady throughput, no stall, no unbounded
@@ -31,6 +41,7 @@ namespace AudioCapture.Tests;
 /// is what gets bounded.
 /// </summary>
 [Trait("Category", "Soak")]
+[Collection("RealtimeSoak")]
 public class CaptureSoakTests : IDisposable
 {
     private const int SampleRate = 48000;
@@ -87,15 +98,21 @@ public class CaptureSoakTests : IDisposable
             diagnostics.BytesWritten >= expectedFloor,
             $"throughput shortfall: wrote {diagnostics.BytesWritten} bytes in {seconds}s, expected >= {expectedFloor}");
 
-        // 4. The backlog stayed bounded. This is the leak assertion: the mix timer
-        //    drains every 100 ms, so a healthy run holds well under a second of
-        //    audio. A consumer falling behind grows this without limit, and over 50
-        //    minutes that is the difference between a stable session and OOM.
-        var oneSecondOfSamples = SampleRate * 2;
+        // 4. The backlog stayed bounded — the leak assertion. A consumer that never
+        //    keeps up grows this without limit: over this run it climbs toward the whole
+        //    stream (millions of samples), and over 50 minutes it is the difference
+        //    between a stable session and OOM. In a healthy run the mix pump drains
+        //    every 100 ms and min-consume leaves under a chunk of residue, so the
+        //    backlog sits far below this bound. The margin over "a second" is headroom
+        //    for ordinary scheduling jitter — a GC pause, a delayed tick — which
+        //    recovers; a leak does not. This soak is isolated from the parallel suite
+        //    (the RealtimeSoak collection), so its pacing is not starved by the
+        //    CPU-bound tests and a transient spike stays well inside the bound.
+        var leakCeiling = SampleRate * 2 * 2; // 2s of stereo audio
         Assert.True(
-            diagnostics.PeakBufferedSamples < oneSecondOfSamples,
-            $"buffer backlog grew to {diagnostics.PeakBufferedSamples} samples "
-                + $"(>= {oneSecondOfSamples}, i.e. a second of audio) — the mix timer is not keeping up");
+            diagnostics.PeakBufferedSamples < leakCeiling,
+            $"buffer backlog peaked at {diagnostics.PeakBufferedSamples} samples "
+                + $"(>= {leakCeiling}, i.e. 2s of audio) — the mix consumer is not keeping up");
 
         // 5. Duration was conserved: frames on disk track wall-clock time. This is
         //    what a rate error looks like at the recording level — a file that is

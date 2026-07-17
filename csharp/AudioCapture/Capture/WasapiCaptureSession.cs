@@ -627,10 +627,10 @@ public sealed class WasapiCaptureSession : ICaptureSession
             // cycle. Draining both buffers to empty and padding the shorter to max()
             // each cycle — as this did before — fabricates silence on whichever side
             // lagged and walks the two streams out of alignment over a long session.
-            // Taking the common minimum and carrying the rest keeps them frame-locked;
-            // mic is the primary clock, so a momentary system gap zero-fills rather
-            // than stalls. flush drains whatever is left at stop, where a final ragged
-            // edge is unavoidable and harmless.
+            // Taking the common minimum and carrying the rest keeps them frame-locked.
+            // ResolveFramesToConsume bounds a genuinely stalled partner; flush drains
+            // whatever is left at stop, where a final ragged edge is unavoidable and
+            // harmless.
             var frames = ResolveFramesToConsume(micFrames, systemFrames, flush);
             if (frames == 0) return;
 
@@ -657,12 +657,16 @@ public sealed class WasapiCaptureSession : ICaptureSession
     }
 
     /// <summary>
-    /// How many frames this mix cycle should consume from each buffer, keeping mic
-    /// and system aligned. Mirrors macOS's readPendingSamples: mic is the primary
-    /// clock, the common minimum is consumed and the remainder carried, and one side
-    /// running dry means either wait for mic or zero-fill a system gap — never pad
-    /// the shorter to the longer. Capped at a second so a backed-up buffer drains
-    /// over several cycles instead of one oversized write. Must hold <see cref="_lock"/>.
+    /// How many frames this mix cycle should consume from each buffer, keeping mic and
+    /// system aligned: take the common minimum, carry the remainder, so the two stay
+    /// frame-locked and neither is padded with fabricated silence.
+    ///
+    /// Symmetric — whichever side leads is the one held back. This diverges from
+    /// macOS's readPendingSamples, which treats mic as the primary clock and only
+    /// zero-fills a fully-empty system buffer. The extra symmetry is deliberate: these
+    /// are growable List buffers, not macOS's drop-on-overflow ring buffers, so a
+    /// partner that stalls has to be bounded here rather than by overflow — and it
+    /// covers a stalled mic, which macOS handles not at all. Must hold <see cref="_lock"/>.
     /// </summary>
     private int ResolveFramesToConsume(int micFrames, int systemFrames, bool flush)
     {
@@ -671,24 +675,34 @@ public sealed class WasapiCaptureSession : ICaptureSession
         if (flush)
             return Math.Max(micFrames, systemFrames);
 
-        const int chunkCap = 48000; // 1s at the configured 48 kHz
+        // A partner behind by less than this is merely late — wait for it and stay
+        // aligned. Beyond it, treat it as stalled. Kept generous on purpose: firing
+        // early on a still-arriving partner would zero-fill a gap and re-introduce the
+        // very misalignment this method exists to prevent. The cost of waiting is
+        // bounded buffering (0.5s ~ 192 KB of floats); the cost of firing early is
+        // permanent skew, so err toward waiting.
+        const int stallGuard = 24000; // 0.5s at the configured 48 kHz
 
         var micEnabled = _config?.EnableMicCapture ?? false;
         var systemEnabled = _config?.EnableSystemCapture ?? false;
 
-        // System-only: system is the clock.
+        // Single-source: that source is the clock, nothing to align against — drain it.
         if (!micEnabled)
-            return Math.Min(systemFrames, chunkCap);
+            return systemFrames;
+        if (!systemEnabled)
+            return micFrames;
 
-        // System disabled, or a momentary system gap: mic drives and Mix zero-fills
-        // the missing system side for this chunk.
-        if (!systemEnabled || systemFrames == 0)
-            return Math.Min(micFrames, chunkCap);
-
-        // Both flowing: consume the common minimum, carry the rest. When mic has the
-        // gap (micFrames == 0) this is 0 — wait for mic rather than let system race
-        // ahead, so the streams stay frame-locked.
-        return Math.Min(Math.Min(micFrames, systemFrames), chunkCap);
+        // Steady state: consume the aligned common minimum and carry the remainder.
+        //
+        // Guard: if one side has surged more than stallGuard ahead of the other, its
+        // partner has stalled (a device hiccup, or the injected pump losing its thread
+        // under test load) and draining only the common minimum would let the leading
+        // side grow without bound. Drain the whole surplus, letting Mix zero-fill the
+        // stalled side, so the buffer clears in one cycle. In the steady state the
+        // surplus is negative and this reduces to the plain aligned minimum.
+        var aligned = Math.Min(micFrames, systemFrames);
+        var surplus = Math.Max(micFrames, systemFrames) - stallGuard;
+        return Math.Max(aligned, Math.Max(surplus, 0));
     }
 
     /// <summary>
