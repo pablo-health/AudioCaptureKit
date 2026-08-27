@@ -64,7 +64,7 @@ public class DemoEncryptorTests
     }
 
     [Fact]
-    public void DemoKey_MatchesMacOSAndRust()
+    public void DemoKey_MatchesMacOS()
     {
         // The demo key is sequential bytes 0x01..0x20 — same across all platforms
         var encryptor = new DemoEncryptor();

@@ -13,49 +13,20 @@ updates:
           - "swift-crypto"
           - "swift-asn1"
 
-  # Rust workspace
-  - package-ecosystem: cargo
-    directory: /windows
-    schedule:
-      interval: weekly
-      day: monday
-    groups:
-      crypto:
-        patterns:
-          - "aes-gcm"
-          - "sha2"
-      utility:
-        patterns:
-          - "parking_lot"
-          - "thiserror"
-          - "log"
-
-  # Sample app (npm)
-  - package-ecosystem: npm
-    directory: /Examples/windows/SampleApp
+  # C# (NuGet) — the library, its tests, and the sample app
+  - package-ecosystem: nuget
+    directories:
+      - /csharp/AudioCapture
+      - /csharp/AudioCapture.Tests
+      - /Examples/windows/SampleApp
+      - /Examples/windows/SampleApp.Tests
     schedule:
       interval: weekly
       day: tuesday
     groups:
-      tauri:
+      all:
         patterns:
-          - "@tauri-apps/*"
-      radix-ui:
-        patterns:
-          - "@radix-ui/*"
-      react:
-        patterns:
-          - "react"
-          - "react-dom"
-          - "@types/react"
-          - "@types/react-dom"
-
-  # Sample app Tauri backend (Rust)
-  - package-ecosystem: cargo
-    directory: /Examples/windows/SampleApp/src-tauri
-    schedule:
-      interval: weekly
-      day: tuesday
+          - "*"
 
   # GitHub Actions
   - package-ecosystem: github-actions
