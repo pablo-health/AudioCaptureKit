@@ -67,16 +67,36 @@ public class WasapiCaptureSessionInjectionTests : IDisposable
         var micFixture = WriteFixture("mic.wav", channels: 1, seconds: 0.5);
         var systemFixture = WriteFixture("system.wav", channels: 2, seconds: 0.5);
 
-        using var session = new WasapiCaptureSession(
-            () => FileWaveIn.Mono16(micFixture, loop: false),
-            () => FileWaveIn.StereoFloat(systemFixture, sampleRate: 44100, loop: false));
+        var micSource = FileWaveIn.Mono16(micFixture, loop: false);
+        var systemSource = FileWaveIn.StereoFloat(systemFixture, sampleRate: 44100, loop: false);
+
+        // "Played through" is a fact each source reports, so wait for it rather than
+        // sleeping long enough to assume it. A fixed delay is a race against the
+        // runner: the sidecars are written synchronously from DataAvailable, so
+        // stopping early truncates whatever had not been handed over yet — and the
+        // system side, carrying the extra 44.1→48 kHz resampler hop, loses more of
+        // its fixture than the mic does. The ratio then lands far below the band
+        // rather than jittering around it (observed on CI: 0.88 against a 2.0
+        // expectation), which reads as a reconciliation bug and is really a
+        // truncation.
+        var micDrained = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var systemDrained = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        micSource.RecordingStopped += (_, _) => micDrained.TrySetResult();
+        systemSource.RecordingStopped += (_, _) => systemDrained.TrySetResult();
+
+        using var session = new WasapiCaptureSession(() => micSource, () => systemSource);
 
         session.Configure(DefaultConfig with { ExportRawPcm = true });
 
         var capture = session.StartCaptureAsync();
-        // Comfortably longer than the 0.5s fixtures so both drain fully even under
-        // load; the captured sample count is fixed by the fixtures, not this delay.
-        await Task.Delay(TimeSpan.FromSeconds(1.5));
+
+        var drained = Task.WhenAll(micDrained.Task, systemDrained.Task);
+        // Only a backstop against a wedged pump — the fixtures are 0.5s.
+        var settled = await Task.WhenAny(drained, Task.Delay(TimeSpan.FromSeconds(30)));
+        Assert.True(
+            ReferenceEquals(settled, drained),
+            "both fixtures should play through before the session is stopped");
+
         var result = await session.StopCaptureAsync();
         await capture;
 
