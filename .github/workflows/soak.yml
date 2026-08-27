@@ -47,15 +47,18 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
 
-      - name: Cache SPM dependencies
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v5
-        with:
-          path: |
-            .build
-            ~/Library/Caches/org.swift.swiftpm
-          key: spm-${{ runner.os }}-${{ hashFiles('Package.swift', 'Package.resolved') }}
-          restore-keys: spm-${{ runner.os }}-
-
+      # Deliberately NOT caching .build here. This job restored the shared
+      # `spm-macOS-` cache through the restore-key prefix, which hands back a
+      # tree built by whatever Swift toolchain was current when it was saved.
+      # After the macos-15 image rotated Xcode, that stale tree made
+      # `swift build --build-tests` fail with
+      # `missing required module '_TestingInternals'` — swift-testing ships
+      # with the toolchain (it is not a package dependency), so its module
+      # artifacts do not survive a toolchain change. The PR lane gets away with
+      # it because it matches the cache's primary key; this weekly job does
+      # not. A cold build costs about a minute against a 30-minute soak, so
+      # buying that back is not worth a class of failure that only shows up
+      # weeks later, in the one job nobody is watching.
       - name: Build
         run: swift build --build-tests
 
