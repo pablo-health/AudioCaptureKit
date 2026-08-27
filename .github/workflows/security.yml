@@ -43,7 +43,7 @@ jobs:
 
       - name: Upload Trivy SARIF (vulnerabilities)
         if: always()
-        uses: github/codeql-action/upload-sarif@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81 # v4
+        uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4
         with:
           sarif_file: trivy-vuln.sarif
           category: trivy-dependency-scan
@@ -75,7 +75,7 @@ jobs:
 
       - name: Upload Trivy SARIF (misconfig + secrets)
         if: always()
-        uses: github/codeql-action/upload-sarif@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81 # v4
+        uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4
         with:
           sarif_file: trivy-config.sarif
           category: trivy-config-scan
