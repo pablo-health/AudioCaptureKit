@@ -5,7 +5,7 @@
 
 ## Background
 
-AudioCaptureKit currently targets macOS (Swift/AVFoundation + Core Audio Taps) and Windows (Rust/WASAPI). This document defines the architecture for extending the library to Android, where — unlike iOS — a real system audio capture API exists: `AudioPlaybackCapture` via `MediaProjection` (Android 10 / API 29+). This gives Android feature parity with macOS and Windows for the full mic + system audio pipeline.
+AudioCaptureKit currently targets macOS (Swift/AVFoundation + Core Audio Taps) and Windows (C#/WASAPI). This document defines the architecture for extending the library to Android, where — unlike iOS — a real system audio capture API exists: `AudioPlaybackCapture` via `MediaProjection` (Android 10 / API 29+). This gives Android feature parity with macOS and Windows for the full mic + system audio pipeline.
 
 ## Android vs macOS Capabilities
 
@@ -88,7 +88,7 @@ System audio (AudioRecord + AudioPlaybackCaptureConfig) ─┘
 |---|---|
 | `StereoMixer` | Port math to Kotlin (identical algorithm: L = mic + sys_L, R = mic + sys_R) |
 | `EncryptedFileWriter` | Re-implement in Kotlin using Conscrypt or `javax.crypto` AES-256-GCM |
-| WAV format | Port WAV header writer from Rust (`audio-capture-core`) to Kotlin |
+| WAV format | Port WAV header writer from C# (`AudioCapture.Storage`) to Kotlin |
 | State machine | Replicate `idle → capturing → completed/failed` transitions in `AndroidCaptureSession` |
 
 ## Language & Build
