@@ -1,17 +1,24 @@
 name: Soak
 
 # Long-running buffer-reliability soak: drives the real capture graph for
-# ~50 minutes of wall-clock real time from both looped file sources
+# ~15 minutes of wall-clock real time per suite, from both looped file sources
 # (CaptureSoakTests) and a deterministic marker-tone generator
 # (SignalGeneratorSoakTests), asserting the ring buffer never overflows or
 # stalls, channel separation and marker timing hold, pause/resume recovers
 # cleanly, and memory stays bounded. Too slow for the PR gate (which runs a
 # ~20s version of the same tests), so it runs weekly and on demand.
 #
-# Both clients ship this capture graph, so both soak. The Windows job is the
-# narrower of the two for now — the C# side has no signal-generator/marker
-# analog yet — but it covers the same core risk: throughput, stalls, and a
-# backlog that grows without bound over a long session.
+# Why 15 minutes and not the 50 this used to ask for: in practice a capture
+# that is going to glitch has glitched by ~10 minutes, so the extra 40 bought
+# no signal. It also cost correctness — SOAK_SECONDS is per-suite, not a total
+# budget, and with two suites on each platform a 50-minute setting could not
+# fit the job's own timeout. The Windows job hit that ceiling every run since
+# the second suite was added and was killed at 75 minutes without ever
+# reporting. Raise SOAK_SECONDS by hand on a workflow_dispatch when a longer
+# run is actually wanted.
+#
+# Both clients ship this capture graph, so both soak, and both now have the
+# signal-generator/marker suite.
 
 on:
   schedule:
@@ -20,9 +27,9 @@ on:
   workflow_dispatch:
     inputs:
       soak_seconds:
-        description: 'Wall-clock capture duration in seconds (default 3000 = 50 min)'
+        description: 'Wall-clock capture duration in seconds, per suite (default 900 = 15 min)'
         required: false
-        default: '3000'
+        default: '900'
 
 permissions:
   contents: read
@@ -35,27 +42,30 @@ jobs:
   soak:
     name: Capture soak (buffer reliability, macOS)
     runs-on: macos-15
-    # Generous headroom over the 50-min soak for build + start/stop.
-    timeout-minutes: 75
+    # Headroom over two 15-min suites run back to back, plus build.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
 
-      - name: Cache SPM dependencies
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v5
-        with:
-          path: |
-            .build
-            ~/Library/Caches/org.swift.swiftpm
-          key: spm-${{ runner.os }}-${{ hashFiles('Package.swift', 'Package.resolved') }}
-          restore-keys: spm-${{ runner.os }}-
-
+      # Deliberately NOT caching .build here. This job restored the shared
+      # `spm-macOS-` cache through the restore-key prefix, which hands back a
+      # tree built by whatever Swift toolchain was current when it was saved.
+      # After the macos-15 image rotated Xcode, that stale tree made
+      # `swift build --build-tests` fail with
+      # `missing required module '_TestingInternals'` — swift-testing ships
+      # with the toolchain (it is not a package dependency), so its module
+      # artifacts do not survive a toolchain change. The PR lane gets away with
+      # it because it matches the cache's primary key; this weekly job does
+      # not. A cold build costs about a minute against a 30-minute soak, so
+      # buying that back is not worth a class of failure that only shows up
+      # weeks later, in the one job nobody is watching.
       - name: Build
         run: swift build --build-tests
 
       - name: Run soak
         env:
-          # schedule has no inputs, so fall back to the 50-minute default.
-          SOAK_SECONDS: ${{ github.event.inputs.soak_seconds || '3000' }}
+          # schedule has no inputs, so fall back to the 15-minute default.
+          SOAK_SECONDS: ${{ github.event.inputs.soak_seconds || '900' }}
         run: |
           echo "Running capture soak for ${SOAK_SECONDS}s of real-time capture"
           swift test --filter Soak
@@ -63,8 +73,8 @@ jobs:
   csharp-soak:
     name: Capture soak (buffer reliability, Windows)
     runs-on: windows-latest
-    # Generous headroom over the 50-min soak for build + start/stop.
-    timeout-minutes: 75
+    # Headroom over two 15-min suites run back to back, plus build.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
 
@@ -78,7 +88,7 @@ jobs:
 
       - name: Run soak
         env:
-          SOAK_SECONDS: ${{ github.event.inputs.soak_seconds || '3000' }}
+          SOAK_SECONDS: ${{ github.event.inputs.soak_seconds || '900' }}
         run: |
           Write-Output "Running capture soak for $env:SOAK_SECONDS seconds of real-time capture"
           dotnet test csharp/AudioCapture.Tests/AudioCapture.Tests.csproj -c Release --no-build --filter "Category=Soak" --verbosity normal
