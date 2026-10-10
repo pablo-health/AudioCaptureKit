@@ -104,6 +104,17 @@ Valid channel counts: 1–4. Channels 3–4 are reserved for future multi-mic su
 | Mixing strategy | `mixingStrategy: MixingStrategy` | `MixingStrategy: MixingStrategy` | `.blended` / `Blended` |
 | Export raw PCM | `exportRawPCM: Bool` | `ExportRawPcm: bool` | false |
 
+Windows-only options:
+
+| Property | C# | Default |
+|----------|-----|---------|
+| Follow the default output device | `FollowDefaultOutputDevice: bool` | false |
+| Mic sidecar path | `MicSidecarPath: string?` | null (timestamp-derived) |
+| System sidecar path | `SystemSidecarPath: string?` | null (timestamp-derived) |
+| Append to existing sidecars | `AppendToSidecars: bool` | false |
+
+With `FollowDefaultOutputDevice`, loopback re-opens in place on the new Console-role default render device when it changes or the current one goes away, and retries after a loopback error; writers and sidecars stay open. Device events reach `ICaptureDelegate.OnDeviceChanged` (a default interface method, so existing implementations are unaffected). Whether following or not, the system sidecar is resampled to `SampleRate` and padded with silence while loopback delivers nothing, so it stays the same length as the mic sidecar. With `AppendToSidecars`, encrypted sidecars from successive captures concatenate into one decryptable stream (a torn final chunk is repaired first). The sidecar writer (`SidecarStreamWriter`) is format-agnostic: it frames whatever bytes it is given. The default mic is the Communications-role capture device.
+
 See [DIARIZATION.md](DIARIZATION.md) for full mixing strategy documentation.
 
 ---
