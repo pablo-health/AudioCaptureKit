@@ -76,7 +76,7 @@ public class CaptureSoakTests : IDisposable
     public async Task SustainedRealTimeCaptureStaysHealthy()
     {
         var seconds = SoakSeconds;
-        var (diagnostics, wavFrames) = await RunSoakAsync(seconds);
+        var (diagnostics, wavFrames, backlog) = await RunSoakAsync(seconds);
 
         // 1. Nothing was lost on the way to disk. A mix cycle that throws drops
         //    whatever it was holding, and nothing downstream would ever know.
@@ -107,12 +107,29 @@ public class CaptureSoakTests : IDisposable
         //    for ordinary scheduling jitter — a GC pause, a delayed tick — which
         //    recovers; a leak does not. This soak is isolated from the parallel suite
         //    (the RealtimeSoak collection), so its pacing is not starved by the
-        //    CPU-bound tests and a transient spike stays well inside the bound.
+        //    CPU-bound tests.
+        //
+        //    What a leak looks like is a backlog that stays high, so that is what the
+        //    hard bound is on: the backlog sampled once a second, at its 95th
+        //    percentile and at the end. The all-time peak gets a much looser bound.
+        //    A hosted runner can stall the whole process for a second or two (the
+        //    weekly Windows soak saw ~1.9 s spikes, on an unchanged commit that had
+        //    passed the week before, and recovered); that is the runner, not the
+        //    graph, and a peak that size recovers where a leak does not.
         var leakCeiling = SampleRate * 2 * 2; // 2s of stereo audio
+        var sorted = backlog.Order().ToArray();
+        var p95 = sorted.Length > 0 ? sorted[(int)((sorted.Length - 1) * 0.95)] : 0;
+        var last = backlog.Count > 0 ? backlog[^1] : 0;
         Assert.True(
-            diagnostics.PeakBufferedSamples < leakCeiling,
+            p95 < leakCeiling && last < leakCeiling,
+            $"buffer backlog stayed high (p95 {p95}, last {last} samples, bound {leakCeiling}, "
+                + "i.e. 2s of audio) — the mix consumer is not keeping up");
+
+        var transientCeiling = leakCeiling * 5; // 10s: far past any scheduling hiccup
+        Assert.True(
+            diagnostics.PeakBufferedSamples < transientCeiling,
             $"buffer backlog peaked at {diagnostics.PeakBufferedSamples} samples "
-                + $"(>= {leakCeiling}, i.e. 2s of audio) — the mix consumer is not keeping up");
+                + $"(>= {transientCeiling}, i.e. 10s of audio) — the mix consumer stalled outright");
 
         // 5. Duration was conserved: frames on disk track wall-clock time. This is
         //    what a rate error looks like at the recording level — a file that is
@@ -139,8 +156,12 @@ public class CaptureSoakTests : IDisposable
     /// Wires looped mic + system fixtures through the real graph and captures for
     /// <paramref name="seconds"/> of wall-clock real time.
     /// </summary>
-    /// <returns>The session's diagnostics and the finalized WAV's frame count.</returns>
-    private async Task<(CaptureDiagnostics Diagnostics, double WavFrames)> RunSoakAsync(double seconds)
+    /// <returns>
+    /// The session's diagnostics, the finalized WAV's frame count, and the backlog
+    /// sampled once a second while capturing.
+    /// </returns>
+    private async Task<(CaptureDiagnostics Diagnostics, double WavFrames, List<int> Backlog)> RunSoakAsync(
+        double seconds)
     {
         // Short fixtures, looped for the whole soak. Content is irrelevant to buffer
         // reliability; distinct tones per channel keep them realistic.
@@ -166,12 +187,19 @@ public class CaptureSoakTests : IDisposable
         session.Configure(config);
 
         var capture = session.StartCaptureAsync();
-        await Task.Delay(TimeSpan.FromSeconds(seconds));
+        var backlog = new List<int>();
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(seconds);
+        while (DateTime.UtcNow < deadline)
+        {
+            var remaining = deadline - DateTime.UtcNow;
+            await Task.Delay(remaining < TimeSpan.FromSeconds(1) ? remaining : TimeSpan.FromSeconds(1));
+            backlog.Add(session.Diagnostics.BufferedSamples);
+        }
         var result = await session.StopCaptureAsync();
         await capture;
 
         using var reader = new WaveFileReader(result.FilePath);
-        return (session.Diagnostics, reader.SampleCount);
+        return (session.Diagnostics, reader.SampleCount, backlog);
     }
 
     private string WriteSineFixture(string name, double frequency, int channels, double seconds = 3.0)

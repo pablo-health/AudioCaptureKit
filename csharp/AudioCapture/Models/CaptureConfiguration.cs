@@ -18,4 +18,32 @@ public sealed record CaptureConfiguration
     public bool EnableSystemCapture { get; init; } = true;
     public MixingStrategy MixingStrategy { get; init; } = MixingStrategy.Blended;
     public bool ExportRawPcm { get; init; }
+
+    /// <summary>
+    /// Re-open the system-audio loopback in place when the Windows default output
+    /// device changes (headset plugged in, Bluetooth connecting, a call app switching
+    /// speakers) or the current one goes away, and retry it after a loopback error.
+    /// The writers and sidecars stay open across the switch. Follows the
+    /// <c>Console</c>-role default render device. Off by default, which keeps the
+    /// original pinned-at-start behaviour.
+    /// </summary>
+    public bool FollowDefaultOutputDevice { get; init; }
+
+    /// <summary>
+    /// Explicit path for the mic sidecar instead of the timestamp-derived one. Required
+    /// to append to a sidecar from an earlier capture (see <see cref="AppendToSidecars"/>).
+    /// </summary>
+    public string? MicSidecarPath { get; init; }
+
+    /// <summary>Explicit path for the system-audio sidecar instead of the timestamp-derived one.</summary>
+    public string? SystemSidecarPath { get; init; }
+
+    /// <summary>
+    /// Continue existing sidecar files instead of truncating them. Encrypted sidecars
+    /// are a sequence of self-delimiting sealed chunks, so the runs concatenate into one
+    /// decryptable stream; a torn final chunk from an interrupted run is repaired first.
+    /// Use with <see cref="MicSidecarPath"/>/<see cref="SystemSidecarPath"/>. The mixed
+    /// WAV is always written fresh.
+    /// </summary>
+    public bool AppendToSidecars { get; init; }
 }

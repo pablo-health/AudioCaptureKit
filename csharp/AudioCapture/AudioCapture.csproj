@@ -16,4 +16,9 @@
   <ItemGroup>
     <PackageReference Include="NAudio" Version="2.2.*" />
   </ItemGroup>
+
+  <ItemGroup>
+    <!-- Lets tests drive the endpoint-notification handlers with injected sources. -->
+    <InternalsVisibleTo Include="AudioCapture.Tests" />
+  </ItemGroup>
 </Project>

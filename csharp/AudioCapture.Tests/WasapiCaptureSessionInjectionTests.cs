@@ -321,13 +321,23 @@ public class WasapiCaptureSessionInjectionTests : IDisposable
         var micFixture = WriteFixture("mic.wav", channels: 1, seconds: 0.5);
         var systemFixture = WriteFixture("system.wav", channels: 2, seconds: 0.5);
 
-        using var session = new WasapiCaptureSession(
-            () => FileWaveIn.Mono16(micFixture, chunkDuration: TimeSpan.FromMilliseconds(10), loop: false),
-            () => FileWaveIn.StereoFloat(systemFixture, chunkDuration: TimeSpan.FromMilliseconds(40), loop: false));
+        var micSource = FileWaveIn.Mono16(micFixture, chunkDuration: TimeSpan.FromMilliseconds(10), loop: false);
+        var systemSource = FileWaveIn.StereoFloat(systemFixture, chunkDuration: TimeSpan.FromMilliseconds(40), loop: false);
+
+        // Wait for both fixtures to play through rather than sleeping past them: under
+        // a starved thread pool a fixed sleep can end with the mic barely started.
+        var micDrained = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var systemDrained = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        micSource.RecordingStopped += (_, _) => micDrained.TrySetResult();
+        systemSource.RecordingStopped += (_, _) => systemDrained.TrySetResult();
+
+        using var session = new WasapiCaptureSession(() => micSource, () => systemSource);
 
         session.Configure(DefaultConfig with { ExportRawPcm = true });
         var capture = session.StartCaptureAsync();
-        await Task.Delay(TimeSpan.FromSeconds(1.5)); // both fixtures drain well inside this
+        var drained = Task.WhenAll(micDrained.Task, systemDrained.Task);
+        var settled = await Task.WhenAny(drained, Task.Delay(TimeSpan.FromSeconds(30)));
+        Assert.True(ReferenceEquals(settled, drained), "both fixtures should play through before the session is stopped");
         var result = await session.StopCaptureAsync();
         await capture;
 
